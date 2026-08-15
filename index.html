@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cadence — sentence flow analyzer</title>
+<meta name="description" content="Grade the choppiness and flow of your prose: stress clashes, sound texture, Latinate density, modifier pileups, and more. No AI — pure phonology and dictionaries.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="site-header">
+  <h1>Cadence</h1>
+  <p class="tagline">Hear your sentences before your readers do. Phonology, not AI —
+    every judgment traces to a rule you can read.</p>
+  <button id="theme-toggle" type="button" aria-label="Toggle color theme">◐</button>
+</header>
+
+<main>
+  <section class="input-card">
+    <label for="text-input" class="visually-hidden">Text to analyze</label>
+    <textarea id="text-input" rows="4" spellcheck="true" autofocus
+      placeholder="Paste a fragment, a sentence, or a few sentences…"></textarea>
+    <div class="input-row">
+      <div class="examples" role="group" aria-label="Example texts">
+        <span class="examples-label">Try:</span>
+        <button type="button" data-example="choppy">choppy</button>
+        <button type="button" data-example="sludge">corporate sludge</button>
+        <button type="button" data-example="twister">tongue-twister</button>
+        <button type="button" data-example="smooth">smooth</button>
+      </div>
+      <span id="status" class="status" role="status">loading dictionaries…</span>
+    </div>
+  </section>
+
+  <section id="results" class="results" hidden>
+    <div class="score-row">
+      <div class="hero-tile">
+        <div class="hero-label">Flow score</div>
+        <div class="hero-value"><span id="overall-score">–</span><span class="hero-max">/100</span></div>
+        <div class="hero-desc" id="overall-desc"></div>
+      </div>
+      <div class="meters" id="category-meters"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Rhythm</h2>
+      <p class="panel-hint">One block per syllable — tall = stressed, short = unstressed.
+        Marked seams are stress clashes (two beats colliding).</p>
+      <div id="rhythm-strip"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Annotated text</h2>
+        <div class="lens-tabs" role="tablist" aria-label="Annotation lens">
+          <button role="tab" data-lens="problems" aria-selected="true">Problems</button>
+          <button role="tab" data-lens="stress" aria-selected="false">Stress</button>
+          <button role="tab" data-lens="sound" aria-selected="false">Sounds</button>
+          <button role="tab" data-lens="origin" aria-selected="false">Etymology</button>
+        </div>
+      </div>
+      <div id="annotated" class="annotated" aria-live="polite"></div>
+      <p class="panel-hint" id="lens-legend"></p>
+      <div id="word-inspector" class="word-inspector" hidden></div>
+    </div>
+
+    <div class="panel">
+      <h2>Findings <span id="finding-count" class="count-badge"></span></h2>
+      <ol id="findings" class="findings"></ol>
+    </div>
+
+    <details class="panel details-panel">
+      <summary><h2>Every metric (table view)</h2></summary>
+      <div id="metric-tables"></div>
+      <h3>Readability formulas</h3>
+      <div id="readability"></div>
+    </details>
+  </section>
+
+  <section id="about" class="panel about">
+    <h2>What this measures</h2>
+    <p>Cadence runs your text through the CMU Pronouncing Dictionary (125,000 words
+      with phonemes and stress), a part-of-speech lexicon, word-frequency ranks, and
+      human concreteness ratings — then applies ~40 rule-based metrics: stress
+      clashes and lapses, consonant pileups at word seams, alliteration and
+      accidental rhyme, Latinate density, modifier pileups, clause shape, and more.
+      The full catalog, with explanations, is in
+      <a href="https://github.com/IndievdB/writing/blob/main/METRICS.md">METRICS.md</a>.
+      Nothing leaves your browser.</p>
+  </section>
+</main>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
