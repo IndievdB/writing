@@ -247,18 +247,20 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
     id: 'regularity', category: 'rhythm', label: 'Metrical regularity',
     value: pct(regularity),
     // Sweet spot: loosely metrical. Too low = jumbled, too high = sing-song.
-    score: bandScore(regularity, [0.55, 0.85], [0.25, 1.01]), weight: 1.5,
+    // Too few syllables and the statistic is noise — don't score it.
+    score: nSyll >= 8 ? bandScore(regularity, [0.55, 0.85], [0.25, 1.01]) : null,
+    weight: 1.5,
   });
 
   // Inter-stress interval burstiness (isochrony proxy).
   const beats = [];
   bin.forEach((b, i) => { if (b) beats.push(i); });
   const intervals = beats.slice(1).map((b, i) => b - beats[i]);
-  const cv = intervals.length >= 2 && mean(intervals) > 0 ? sd(intervals) / mean(intervals) : 0;
+  const cv = intervals.length >= 3 && mean(intervals) > 0 ? sd(intervals) / mean(intervals) : null;
   addMetric({
     id: 'isochrony', category: 'rhythm', label: 'Beat spacing evenness (CV)',
-    value: r1(cv).toFixed(1),
-    score: bandScore(cv, [0.2, 0.65], [0, 1.4]), weight: 1,
+    value: cv == null ? '—' : r1(cv).toFixed(1),
+    score: cv == null ? null : bandScore(cv, [0, 0.65], [0, 1.4]), weight: 1,
   });
 
   // Monosyllable runs.
@@ -456,12 +458,12 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
   addMetric({
     id: 'sibilance', category: 'sound', label: 'Sibilance (s/z/sh sounds)',
     value: pct(sibRate),
-    score: bandScore(sibRate, [0.04, 0.15], [0, 0.28]), weight: 1,
+    score: bandScore(sibRate, [0, 0.15], [0, 0.28]), weight: 1,
   });
   addMetric({
     id: 'plosives', category: 'sound', label: 'Plosives (p/t/k/b/d/g)',
     value: pct(ploRate),
-    score: bandScore(ploRate, [0.08, 0.24], [0, 0.4]), weight: 1,
+    score: bandScore(ploRate, [0, 0.24], [0, 0.4]), weight: 1,
   });
   addMetric({
     id: 'euphony', category: 'sound', label: 'Soft consonants (l/r/m/n/w/y)',
@@ -514,7 +516,11 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
 
   // ============================ LEXIS ============================
 
-  const latinate = content.filter((a) => a.ety.origin === 'latinate');
+  // Only unassimilated Latinate counts toward "heavy diction": short, common
+  // loans (change, people, money) read as plain English; the register problem
+  // is the polysyllabic or uncommon borrowings.
+  const latinate = content.filter((a) => a.ety.origin === 'latinate' &&
+    (a.phon.syllableCount >= 3 || a.freqRank == null || a.freqRank > 5000));
   const latRate = content.length ? latinate.length / content.length : 0;
   for (const a of content) {
     if (a.ety.swap) {
@@ -539,7 +545,7 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
   addMetric({
     id: 'latinate', category: 'lexis', label: 'Latinate share of content words',
     value: pct(latRate),
-    score: bandScore(latRate, [0.05, 0.35], [0, 0.7]), weight: 2.5,
+    score: bandScore(latRate, [0, 0.35], [0, 0.7]), weight: 2.5,
   });
 
   const concVals = content.map((a) => a.conc).filter((c) => c != null);
@@ -578,7 +584,7 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
     addMetric({
       id: 'rarity', category: 'lexis', label: 'Word rarity (mean log rank)',
       value: r1(meanLogRank).toFixed(1),
-      score: bandScore(meanLogRank, [1.5, 3.3], [0, 4.6]), weight: 1,
+      score: bandScore(meanLogRank, [0, 3.3], [0, 4.6]), weight: 1,
     });
   }
 
@@ -680,7 +686,7 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
   addMetric({
     id: 'preps', category: 'syntax', label: 'Preposition share',
     value: pct(nWords ? preps.length / nWords : 0),
-    score: bandScore(nWords ? preps.length / nWords : 0, [0.02, 0.16], [0, 0.3]), weight: 1,
+    score: bandScore(nWords ? preps.length / nWords : 0, [0, 0.16], [0, 0.3]), weight: 1,
   });
 
   // Expletive opener.
@@ -769,12 +775,12 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
   addMetric({
     id: 'length', category: 'shape', label: 'Sentence length',
     value: `${nWords} words / ${nSyll} syllables`,
-    score: bandScore(nWords, [6, 24], [1, 45]), weight: 1.5,
+    score: bandScore(nWords, [4, 24], [1, 45]), weight: 1.5,
   });
   addMetric({
     id: 'breath', category: 'shape', label: 'Longest breath (syllables)',
     value: String(maxBreath),
-    score: bandScore(maxBreath, [4, 30], [0, 48]), weight: 1.5,
+    score: bandScore(maxBreath, [1, 30], [0, 48]), weight: 1.5,
   });
   const pauseRate = nWords ? clauses.length / nWords : 0;
   if (clauses.length >= 4 && mean(clauses) < 4) {
@@ -789,7 +795,9 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
   addMetric({
     id: 'clauses', category: 'shape', label: 'Clauses (len avg / var)',
     value: clauses.length ? `${clauses.length} (${r1(mean(clauses))} ± ${r1(sd(clauses))})` : '1',
-    score: clauses.length >= 2 ? bandScore(sd(clauses) / Math.max(1, mean(clauses)), [0.25, 1.2], [0, 2.2]) : null,
+    // Negative hardLo keeps equal-length clauses (cv 0) at a decent score
+    // rather than treating uniformity as a hard failure.
+    score: clauses.length >= 2 ? bandScore(sd(clauses) / Math.max(1, mean(clauses)), [0.2, 1.2], [-0.5, 2.2]) : null,
     weight: 1,
   });
 

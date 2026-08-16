@@ -275,6 +275,59 @@ export function renderInspector(a, el) {
 }
 
 // ---------------------------------------------------------------------------
+// Compare mode: original vs revision — category deltas + which finding types
+// were fixed, remain, or are new.
+
+export function renderCompare(before, after, el) {
+  const cats = Object.keys(CATEGORY_LABELS).filter(
+    (c) => before.scores[c] != null || after.scores[c] != null,
+  );
+  const row = (label, a, b) => {
+    const d = (b ?? 0) - (a ?? 0);
+    const arrow = d > 0 ? '<span class="delta up" aria-label="improved">▲</span>'
+      : d < 0 ? '<span class="delta down" aria-label="worse">▼</span>'
+      : '<span class="delta same">＝</span>';
+    return `<tr><td>${esc(label)}</td><td class="num">${a ?? '—'}</td>
+      <td class="num">${b ?? '—'}</td>
+      <td class="num">${arrow} ${d > 0 ? '+' : ''}${d}</td></tr>`;
+  };
+  const scoreTable = `<div class="metric-table-wrap"><table>
+    <thead><tr><th scope="col">Score</th><th scope="col">Original</th><th scope="col">Revision</th><th scope="col">Change</th></tr></thead>
+    <tbody>
+      ${row('Overall flow', before.scores.overall, after.scores.overall)}
+      ${cats.map((c) => row(CATEGORY_LABELS[c], before.scores[c], after.scores[c])).join('')}
+    </tbody></table></div>`;
+
+  const countBy = (res) => {
+    const m = new Map();
+    for (const f of res.findings) {
+      if (!m.has(f.id)) m.set(f.id, { title: f.title, n: 0 });
+      m.get(f.id).n++;
+    }
+    return m;
+  };
+  const a = countBy(before), b = countBy(after);
+  const ids = [...new Set([...a.keys(), ...b.keys()])];
+  const fixed = [], remain = [], added = [];
+  for (const id of ids) {
+    const na = a.get(id)?.n ?? 0, nb = b.get(id)?.n ?? 0;
+    const title = (a.get(id) ?? b.get(id)).title;
+    if (nb === 0) fixed.push(`${title} (×${na})`);
+    else if (na === 0) added.push(`${title} (×${nb})`);
+    else remain.push(`${title}: ${na} → ${nb}`);
+  }
+  const chip = (cls, icon, label, items) => items.length
+    ? `<div class="cmp-group ${cls}"><span class="cmp-head">${icon} ${label}</span> ${items.map(esc).join(' · ')}</div>`
+    : '';
+  el.innerHTML = scoreTable +
+    chip('cmp-fixed', '✓', 'Fixed', fixed) +
+    chip('cmp-remain', '↻', 'Still there', remain) +
+    chip('cmp-added', '＋', 'New in revision', added) +
+    (!fixed.length && !remain.length && !added.length
+      ? '<p class="no-findings">No findings in either version.</p>' : '');
+}
+
+// ---------------------------------------------------------------------------
 
 function renderTables(result, els) {
   const wrap = els.metricTables;

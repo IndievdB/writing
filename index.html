@@ -21,6 +21,11 @@
     <label for="text-input" class="visually-hidden">Text to analyze</label>
     <textarea id="text-input" rows="4" spellcheck="true" autofocus
       placeholder="Paste a fragment, a sentence, or a few sentences…"></textarea>
+    <div id="revision-wrap" hidden>
+      <label for="revision-input" class="revision-label">Revision — rewrite it here and watch the deltas:</label>
+      <textarea id="revision-input" rows="4" spellcheck="true"
+        placeholder="Your rewrite of the text above…"></textarea>
+    </div>
     <div class="input-row">
       <div class="examples" role="group" aria-label="Example texts">
         <span class="examples-label">Try:</span>
@@ -28,9 +33,15 @@
         <button type="button" data-example="sludge">corporate sludge</button>
         <button type="button" data-example="twister">tongue-twister</button>
         <button type="button" data-example="smooth">smooth</button>
+        <button type="button" id="revision-toggle" class="revision-toggle">compare a revision</button>
       </div>
       <span id="status" class="status" role="status">loading dictionaries…</span>
     </div>
+  </section>
+
+  <section id="compare-panel" class="panel compare-panel" hidden>
+    <h2>Original → revision</h2>
+    <div id="compare-body"></div>
   </section>
 
   <section id="results" class="results" hidden>

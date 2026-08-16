@@ -14,6 +14,9 @@ sentences and get:
   *strengths stripped*"),
 - a per-word inspector (phonemes, stress, part of speech, frequency rank,
   concreteness, Latinate/Germanic origin),
+- a **compare mode** — paste a revision below the original and watch category
+  deltas plus which problems you fixed, kept, or introduced,
+- shareable URLs (the text lives in the location hash),
 - the classic readability formulas, in a table for the curious.
 
 The full catalog of what's measured and why is in [METRICS.md](METRICS.md).

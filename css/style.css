@@ -267,3 +267,23 @@ td.num { font-variant-numeric: tabular-nums; }
   background: var(--hairline); color: var(--ink);
 }
 .about p { color: var(--ink-2); margin: 0.3rem 0 0; font-size: 0.93rem; }
+
+/* ---------- compare mode ---------- */
+.revision-label {
+  display: block; margin: 0.6rem 0 0.3rem; font-size: 0.85rem; color: var(--ink-2);
+}
+#revision-wrap[hidden] { display: none; }
+.revision-toggle { border-style: dashed !important; }
+.compare-panel[hidden] { display: none; }
+.delta.up { color: var(--good-text); }
+.delta.down { color: var(--critical); }
+.delta.same { color: var(--muted); }
+.cmp-group {
+  margin-top: 0.55rem; font-size: 0.9rem; color: var(--ink-2);
+  padding-left: 0.7rem; border-left: 3px solid var(--hairline);
+}
+.cmp-group .cmp-head { font-weight: 650; color: var(--ink); margin-right: 0.3rem; }
+.cmp-fixed { border-left-color: var(--good); }
+.cmp-fixed .cmp-head { color: var(--good-text); }
+.cmp-remain { border-left-color: var(--warning); }
+.cmp-added { border-left-color: var(--critical); }
