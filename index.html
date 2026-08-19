@@ -3,16 +3,16 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cadence — sentence flow analyzer</title>
-<meta name="description" content="Grade the choppiness and flow of your prose: stress clashes, sound texture, Latinate density, modifier pileups, and more. No AI — pure phonology and dictionaries.">
+<title>Cadence — word finder &amp; sentence builder</title>
+<meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and build sentences with live flow analysis. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <header class="site-header">
   <h1>Cadence</h1>
-  <p class="tagline">Hear your sentences before your readers do. Phonology, not AI —
-    every judgment traces to a rule you can read.</p>
+  <p class="tagline">Find the word that fits the meaning <em>and</em> the music, then build
+    the sentence. Phonology and dictionaries, not AI — every result traces to a rule.</p>
   <button id="theme-toggle" type="button" aria-label="Toggle color theme">◐</button>
 </header>
 
@@ -37,6 +37,56 @@
       </div>
       <span id="status" class="status" role="status">loading dictionaries…</span>
     </div>
+  </section>
+
+  <section class="panel finder-panel">
+    <div class="panel-head">
+      <h2>Word finder</h2>
+      <button type="button" id="finder-clear" class="finder-clear">clear</button>
+    </div>
+    <label for="seed-input" class="visually-hidden">Meaning</label>
+    <input id="seed-input" type="text" autocomplete="off" spellcheck="false"
+      placeholder="Meaning — one or more words: “walk slowly”, “big”, “sad quiet”… or leave empty to search by sound alone">
+    <div class="constraint-grid">
+      <label>Alliterates with
+        <input id="c-allit" autocomplete="off" placeholder="letters or a word: br, sh, silver"></label>
+      <label>Vowel sound of (assonance)
+        <input id="c-asson" autocomplete="off" placeholder="a word: time, moon, stone"></label>
+      <label>Contains sounds (consonance)
+        <input id="c-conson" autocomplete="off" placeholder="letters: m, st, l"></label>
+      <label>Rhymes with
+        <input id="c-rhyme" autocomplete="off" placeholder="a word: light"></label>
+      <label>Syllables
+        <input id="c-syll" autocomplete="off" placeholder="2  or  1-3"></label>
+      <label>Stress pattern
+        <input id="c-stress" autocomplete="off" placeholder="1 = DUM · 01 = da-DUM · 10 = DUM-da"></label>
+      <label>Texture
+        <select id="c-texture">
+          <option value="">any</option>
+          <option value="soft">soft — flows (l, m, n, r, w)</option>
+          <option value="hard">hard — punches (p, t, k, s)</option>
+        </select></label>
+      <label>Origin
+        <select id="c-origin">
+          <option value="">any</option>
+          <option value="germanic">Germanic — plain, punchy</option>
+          <option value="latinate">Latinate — formal, abstract</option>
+        </select></label>
+      <label>Feel
+        <select id="c-feel">
+          <option value="">any</option>
+          <option value="concrete">concrete — picture it</option>
+          <option value="abstract">abstract — concept</option>
+        </select></label>
+      <label>Rarity
+        <select id="c-rarity">
+          <option value="">any</option>
+          <option value="common">common</option>
+          <option value="rare">rare — surprising</option>
+        </select></label>
+    </div>
+    <p id="finder-status" class="panel-hint"></p>
+    <div id="finder-results" class="finder-results" aria-live="polite"></div>
   </section>
 
   <section id="compare-panel" class="panel compare-panel" hidden>
@@ -90,10 +140,11 @@
   </section>
 
   <section id="about" class="panel about">
-    <h2>What this measures</h2>
-    <p>Cadence runs your text through the CMU Pronouncing Dictionary (125,000 words
-      with phonemes and stress), a part-of-speech lexicon, word-frequency ranks, and
-      human concreteness ratings — then applies ~40 rule-based metrics: stress
+    <h2>How it works</h2>
+    <p>The word finder searches 60,000 WordNet synonym groups and their definitions
+      (a built-in reverse dictionary), then filters by sound using the CMU
+      Pronouncing Dictionary — 125,000 words with phonemes and stress. The sentence
+      box runs the same phonology through ~40 rule-based flow metrics: stress
       clashes and lapses, consonant pileups at word seams, alliteration and
       accidental rhyme, Latinate density, modifier pileups, clause shape, and more.
       The full catalog, with explanations, is in

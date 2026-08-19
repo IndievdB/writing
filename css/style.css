@@ -268,6 +268,50 @@ td.num { font-variant-numeric: tabular-nums; }
 }
 .about p { color: var(--ink-2); margin: 0.3rem 0 0; font-size: 0.93rem; }
 
+/* ---------- word finder ---------- */
+.finder-panel input[type="text"], .finder-panel input:not([type]) {
+  width: 100%; border: 1px solid var(--hairline); border-radius: 8px;
+  padding: 0.55rem 0.7rem; font: inherit; background: var(--page); color: var(--ink);
+}
+.finder-panel input:focus, .finder-panel select:focus {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+#seed-input { font-size: 1.05rem; margin-top: 0.2rem; }
+.constraint-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+  gap: 0.55rem 0.8rem; margin-top: 0.7rem;
+}
+.constraint-grid label {
+  display: flex; flex-direction: column; gap: 0.18rem;
+  font-size: 0.8rem; color: var(--ink-2);
+}
+.constraint-grid input, .constraint-grid select {
+  border: 1px solid var(--hairline); border-radius: 7px;
+  padding: 0.35rem 0.5rem; font: inherit; font-size: 0.9rem;
+  background: var(--page); color: var(--ink); width: 100%;
+}
+.finder-clear {
+  background: none; border: 1px solid var(--hairline); border-radius: 999px;
+  color: var(--ink-2); font-size: 0.82rem; padding: 0.12rem 0.65rem; cursor: pointer;
+}
+.finder-clear:hover { border-color: var(--accent); color: var(--accent); }
+.finder-results { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.3rem; }
+.word-chip {
+  display: inline-flex; align-items: baseline; gap: 0.4rem;
+  background: var(--page); border: 1px solid var(--hairline); border-radius: 999px;
+  padding: 0.22rem 0.75rem; cursor: pointer; font: inherit;
+  color: var(--ink);
+}
+.word-chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--page)); }
+.chip-word { font-size: 0.98rem; }
+.chip-meta { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
+.wi-find {
+  margin-left: 0.7rem; background: none; border: 1px solid var(--hairline);
+  border-radius: 999px; color: var(--accent); font-size: 0.78rem;
+  padding: 0.08rem 0.6rem; cursor: pointer; vertical-align: middle;
+}
+.wi-find:hover { border-color: var(--accent); }
+
 /* ---------- compare mode ---------- */
 .revision-label {
   display: block; margin: 0.6rem 0 0.3rem; font-size: 0.85rem; color: var(--ink-2);

@@ -21,6 +21,8 @@ SOURCES = {
     "lexicon.js": "https://raw.githubusercontent.com/dariusk/pos-js/master/lexicon.js",
     "concreteness.txt": "https://raw.githubusercontent.com/ArtsEngine/concreteness/master/Concreteness_ratings_Brysbaert_et_al_BRM.txt",
     "en_full.txt": "https://raw.githubusercontent.com/hermitdave/FrequencyWords/master/content/2018/en/en_full.txt",
+    "en_thesaurus.jsonl": "https://raw.githubusercontent.com/zaibacu/thesaurus/master/en_thesaurus.jsonl",
+    "data.adj": "https://raw.githubusercontent.com/moos/wordnet-db/master/dict/data.adj",
 }
 
 FREQ_TOP_N = 100_000
@@ -123,6 +125,91 @@ def build_freq(src: Path, out: Path) -> None:
     print(f"freq: {len(words)} words -> {out}")
 
 
+def build_thesaurus(src: Path, cmudict_out: Path, out: Path) -> None:
+    """WordNet synsets -> one line per synset: pos\tmembers\tgloss.
+
+    Members are single lowercase words that exist in the pronouncing
+    dictionary (the finder filters by sound, so words without phonemes are
+    useless to it). Entries sharing a wordnet_id are merged into one synset.
+    The gloss (first definition, examples stripped) powers reverse-dictionary
+    search.
+    """
+    known = {line.split("\t", 1)[0] for line in cmudict_out.read_text(encoding="utf-8").splitlines() if line}
+    synsets: dict[str, dict] = {}
+    for raw in src.read_text(encoding="utf-8", errors="replace").splitlines():
+        try:
+            e = json.loads(raw)
+        except ValueError:
+            continue
+        sid = e.get("wordnet_id")
+        if not sid:
+            continue
+        pos = {"noun": "N", "verb": "V", "adj": "J", "adv": "R"}.get(e.get("pos"), "")
+        s = synsets.setdefault(sid, {"pos": pos, "members": set(), "gloss": ""})
+        for w in [e.get("word", "")] + list(e.get("synonyms", [])):
+            w = w.lower()
+            if WORD_RE.match(w) and w in known:
+                s["members"].add(w)
+        if not s["gloss"]:
+            descs = e.get("desc") or []
+            gloss = descs[0] if descs else ""
+            gloss = re.sub(r"[\"'`;].*$", "", gloss)          # drop quoted examples
+            gloss = re.sub(r"\([^)]*\)", " ", gloss)          # drop parentheticals
+            gloss = re.sub(r"[^a-z ]", " ", gloss.lower())
+            s["gloss"] = " ".join(gloss.split())[:120]
+    lines = []
+    for s in synsets.values():
+        if not s["members"] or (len(s["members"]) < 2 and not s["gloss"]):
+            continue
+        lines.append(f"{s['pos']}\t{' '.join(sorted(s['members']))}\t{s['gloss']}")
+    out.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"thesaurus: {len(lines)} synsets -> {out}")
+
+
+def build_adj_clusters(src: Path, cmudict_out: Path, out_append: Path) -> None:
+    """WordNet adjective similar-to clusters, appended to the thesaurus file.
+
+    WordNet groups adjectives as a head synset (big/large) plus satellite
+    synsets (huge, vast, enormous...) linked by '&' pointers. The flat synset
+    export loses those links, which is exactly the recall a thesaurus needs —
+    so parse data.adj and emit one cluster line per head synset.
+    """
+    known = {line.split("\t", 1)[0] for line in cmudict_out.read_text(encoding="utf-8").splitlines() if line}
+    words_at: dict[str, list[str]] = {}
+    similar: dict[str, list[str]] = {}
+    heads: list[str] = []
+    for raw in src.read_text(encoding="latin-1").splitlines():
+        if raw.startswith("  ") or not raw.strip():
+            continue
+        body = raw.split("|", 1)[0].split()
+        offset, ss_type = body[0], body[2]
+        w_cnt = int(body[3], 16)
+        ws = []
+        for i in range(w_cnt):
+            w = body[4 + 2 * i].lower()
+            w = re.sub(r"\(.*\)$", "", w)  # strip (a)/(p) markers
+            if WORD_RE.match(w) and w in known:
+                ws.append(w)
+        words_at[offset] = ws
+        idx = 4 + 2 * w_cnt
+        p_cnt = int(body[idx])
+        ptrs = body[idx + 1:idx + 1 + 4 * p_cnt]
+        sims = [ptrs[4 * i + 1] for i in range(p_cnt) if ptrs[4 * i] == "&"]
+        similar[offset] = sims
+        if ss_type == "a":
+            heads.append(offset)
+    lines = []
+    for h in heads:
+        cluster = set(words_at.get(h, []))
+        for s in similar.get(h, []):
+            cluster.update(words_at.get(s, []))
+        if len(cluster) >= 3:
+            lines.append(f"J\t{' '.join(sorted(cluster))}\t")
+    with out_append.open("a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+    print(f"adj clusters: {len(lines)} appended -> {out_append}")
+
+
 def main() -> None:
     repo = Path(__file__).resolve().parent.parent
     src_dir = Path(sys.argv[1]) if len(sys.argv) > 1 else repo / "tools" / "sources"
@@ -133,6 +220,8 @@ def main() -> None:
     build_pos(src_dir / "lexicon.js", data / "pos.txt")
     build_concreteness(src_dir / "concreteness.txt", data / "conc.txt")
     build_freq(src_dir / "en_full.txt", data / "freq.txt")
+    build_thesaurus(src_dir / "en_thesaurus.jsonl", data / "cmudict.txt", data / "thesaurus.txt")
+    build_adj_clusters(src_dir / "data.adj", data / "cmudict.txt", data / "thesaurus.txt")
 
 
 if __name__ == "__main__":

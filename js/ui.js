@@ -253,6 +253,35 @@ function highlightByOffsets(annotated, spans) {
 
 // ---------------------------------------------------------------------------
 
+// Finder result chips. onInsert(word) fires when a chip is clicked.
+export function renderFinderResults(results, el, statusEl, onInsert, query) {
+  el.innerHTML = '';
+  if (!results.length) {
+    statusEl.textContent = query.empty
+      ? 'Type a meaning above, set a sound constraint, or both — results appear here.'
+      : 'No words match — loosen a constraint (stress pattern and rhyme are the strictest).';
+    return;
+  }
+  statusEl.textContent = `${results.length} word${results.length === 1 ? '' : 's'} — click one to insert it into your sentence at the cursor. Hover for details.`;
+  const frag = document.createDocumentFragment();
+  for (const r of results) {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'word-chip';
+    const stress = (r.info.phon.dictStresses ?? r.info.phon.stresses)
+      .map((s) => (s >= 1 ? '´' : '˘')).join('');
+    chip.innerHTML = `<span class="chip-word">${esc(r.word)}</span><span class="chip-meta">${stress}</span>`;
+    const bits = [r.info.phon.rawPhones?.join(' ')];
+    if (r.reasons.length) bits.push(r.reasons.join('; '));
+    if (r.info.ety.origin !== 'neutral') bits.push(r.info.ety.origin);
+    if (r.info.conc != null) bits.push(`concreteness ${(r.info.conc / 100).toFixed(1)}/5`);
+    chip.title = bits.filter(Boolean).join('\n');
+    chip.addEventListener('click', () => onInsert(r.word));
+    frag.appendChild(chip);
+  }
+  el.appendChild(frag);
+}
+
 export function renderInspector(a, el) {
   const ord = (n) => `#${n.toLocaleString()}`;
   const items = [];
@@ -269,7 +298,8 @@ export function renderInspector(a, el) {
   if (a.ety.origin !== 'neutral') items.push(['origin', `${a.ety.origin} (heuristic)`]);
   if (a.ety.swap) items.push(['plainer', `“${a.ety.swap}”`]);
   if (a.phon.oov) items.push(['note', 'not in the pronouncing dictionary — estimated']);
-  el.innerHTML = `<div class="wi-head">${esc(a.token.value)}</div>` +
+  el.innerHTML = `<div class="wi-head">${esc(a.token.value)}` +
+    `<button type="button" class="wi-find" data-find-word="${esc(a.lower)}">find alternatives ↓</button></div>` +
     items.map(([k, v]) => `<span class="wi-item">${k}: <b>${esc(v)}</b></span>`).join('');
   el.hidden = false;
 }

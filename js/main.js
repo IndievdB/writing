@@ -1,7 +1,8 @@
 // App wiring: data loading, input handling, lens tabs, theme toggle.
 import { Lexicon } from './lexicon.js';
 import { analyzeText } from './analyze.js';
-import { renderResults, renderInspector, renderCompare, LENS_LEGENDS } from './ui.js';
+import { Finder } from './finder.js';
+import { renderResults, renderInspector, renderCompare, renderFinderResults, LENS_LEGENDS } from './ui.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -15,6 +16,14 @@ const els = {
   revisionWrap: $('revision-wrap'), revisionInput: $('revision-input'),
   revisionToggle: $('revision-toggle'),
   comparePanel: $('compare-panel'), compareBody: $('compare-body'),
+  seedInput: $('seed-input'), finderStatus: $('finder-status'),
+  finderResults: $('finder-results'), finderClear: $('finder-clear'),
+};
+const constraintEls = {
+  allit: $('c-allit'), asson: $('c-asson'), conson: $('c-conson'),
+  rhyme: $('c-rhyme'), syll: $('c-syll'), stress: $('c-stress'),
+  texture: $('c-texture'), origin: $('c-origin'), feel: $('c-feel'),
+  rarity: $('c-rarity'),
 };
 
 const EXAMPLES = {
@@ -25,10 +34,11 @@ const EXAMPLES = {
 };
 
 const lexicon = new Lexicon();
+const finder = new Finder(lexicon);
 let lastResult = null;
 
 async function loadData() {
-  const files = ['cmudict', 'pos', 'conc', 'freq'];
+  const files = ['cmudict', 'pos', 'conc', 'freq', 'thesaurus'];
   let done = 0;
   const update = () => { els.status.textContent = `loading dictionaries… ${done}/${files.length}`; };
   update();
@@ -41,8 +51,10 @@ async function loadData() {
       return t;
     }));
     lexicon.load({ cmudict: texts[0], pos: texts[1], conc: texts[2], freq: texts[3] });
-    els.status.textContent = `ready — ${lexicon.phones.size.toLocaleString()} words in the pronouncing dictionary`;
+    finder.loadThesaurus(texts[4]);
+    els.status.textContent = `ready — ${lexicon.phones.size.toLocaleString()} words, ${finder.synsets.length.toLocaleString()} synonym groups`;
     run();
+    runFinder();
   } catch (e) {
     els.status.textContent = `could not load dictionaries (${e.message}). If you opened index.html directly, serve the folder instead: python3 -m http.server`;
   }
@@ -93,10 +105,52 @@ function restoreHash() {
   }
 }
 
+// ---- word finder ----
+
+function runFinder() {
+  if (!lexicon.ready) return;
+  const seeds = els.seedInput.value.toLowerCase()
+    .split(/[\s,;]+/).map((s) => s.replace(/[^a-z'\-]/g, '')).filter(Boolean)
+    .slice(0, 5);
+  const constraints = {};
+  for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el.value;
+  const empty = !seeds.length && Object.values(constraints).every((v) => !v || !v.trim());
+  const results = empty ? [] : finder.search({ seeds, constraints });
+  renderFinderResults(results, els.finderResults, els.finderStatus, insertWord, { empty });
+}
+
+// Insert a found word into the sentence at the cursor, with sane spacing.
+function insertWord(word) {
+  const ta = els.input;
+  const pos = ta.selectionStart ?? ta.value.length;
+  const before = ta.value.slice(0, pos);
+  const after = ta.value.slice(ta.selectionEnd ?? pos);
+  const lead = before && !/[\s(\["'“‘\-—]$/.test(before) ? ' ' : '';
+  const trail = after && !/^[\s.,;:!?)\]"'”’\-—]/.test(after) ? ' ' : '';
+  ta.value = before + lead + word + trail + after;
+  const cursor = (before + lead + word).length;
+  ta.setSelectionRange(cursor, cursor);
+  ta.focus();
+  run();
+}
+
 let timer = null;
 const queueRun = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
 els.input.addEventListener('input', queueRun);
 els.revisionInput.addEventListener('input', queueRun);
+
+let finderTimer = null;
+const queueFinder = () => { clearTimeout(finderTimer); finderTimer = setTimeout(runFinder, 250); };
+els.seedInput.addEventListener('input', queueFinder);
+for (const el of Object.values(constraintEls)) {
+  el.addEventListener('input', queueFinder);
+  el.addEventListener('change', queueFinder);
+}
+els.finderClear.addEventListener('click', () => {
+  els.seedInput.value = '';
+  for (const el of Object.values(constraintEls)) el.value = '';
+  runFinder();
+});
 
 els.revisionToggle.addEventListener('click', () => {
   const show = els.revisionWrap.hidden;
@@ -137,6 +191,16 @@ els.annotated.addEventListener('click', (e) => {
   const s = lastResult.sentences[Number(tok.dataset.si)];
   const a = s?.ann[Number(tok.dataset.wi)];
   if (a) renderInspector(a, els.inspector);
+});
+
+// "Find alternatives" from the inspector: seed the finder with that word.
+els.inspector.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-find-word]');
+  if (!btn) return;
+  els.seedInput.value = btn.dataset.findWord;
+  runFinder();
+  els.seedInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  els.seedInput.focus();
 });
 
 // Theme toggle: auto -> explicit dark -> explicit light.

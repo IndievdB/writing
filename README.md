@@ -1,25 +1,27 @@
-# Cadence — sentence flow analyzer
+# Cadence — word finder & sentence builder
 
-A static web app that grades the flow and choppiness of prose — no LLM, no
-server, nothing leaves the browser. Paste a fragment, a sentence, or a few
-sentences and get:
+A static web app for finding the word that fits the meaning *and* the music,
+then building the sentence — no LLM, no server, nothing leaves the browser.
 
-- a **flow score** with five category meters (rhythm, sound, word choice,
-  syntax, shape),
-- a **rhythm strip** showing every syllable's stress, with stress clashes
-  marked,
-- **annotated text** with four lenses (problems, stress, sounds, etymology),
-- **located findings** — each anchored to the exact words, each with a fix
-  ("stress clash at *big dog*", "utilize → use", "7 consonants jammed at
-  *strengths stripped*"),
-- a per-word inspector (phonemes, stress, part of speech, frequency rank,
-  concreteness, Latinate/Germanic origin),
-- a **compare mode** — paste a revision below the original and watch category
-  deltas plus which problems you fixed, kept, or introduced,
-- shareable URLs (the text lives in the location hash),
-- the classic readability formulas, in a table for the curious.
+**The word finder** searches by meaning and by sound at once:
 
-The full catalog of what's measured and why is in [METRICS.md](METRICS.md).
+- type one or more **meaning words** ("walk slowly", "shine bright") —
+  synonyms come from 60k WordNet groups, plus a reverse dictionary over their
+  definitions,
+- constrain the sound: **alliteration** (letters or a word), **assonance**
+  (vowel sound of a word), **consonance** (contains sounds), **rhyme**,
+  **syllable count**, **stress pattern** (`01` = da-DUM), **texture**
+  (soft l/m/n/r vs. hard p/t/k/s), **origin** (Germanic/Latinate), **feel**
+  (concrete/abstract), and **rarity**,
+- or leave the meaning empty and sweep the whole dictionary by sound alone,
+- click a result to insert it into your sentence at the cursor.
+
+**The sentence box** runs live flow analysis as you build: a flow score with
+five category meters, a per-syllable rhythm strip with stress clashes marked,
+annotated text with four lenses (problems / stress / sounds / etymology),
+located findings with suggested fixes, a per-word inspector with a
+"find alternatives" jump back into the finder, a revision compare mode, and
+shareable URLs. The full catalog of flow metrics is in [METRICS.md](METRICS.md).
 
 ## How it works
 
@@ -32,6 +34,7 @@ Instead of a language model, it uses four data files (built by
 | `pos.txt` | [Eric Brill's tagger lexicon](https://github.com/dariusk/pos-js) (MIT packaging) | part-of-speech roles for 78k words |
 | `conc.txt` | [Brysbaert, Warriner & Kuperman concreteness norms](https://github.com/ArtsEngine/concreteness) | how concrete 37k words feel to humans |
 | `freq.txt` | [hermitdave FrequencyWords](https://github.com/hermitdave/FrequencyWords) (MIT, OpenSubtitles 2018) | frequency rank of the top 100k words |
+| `thesaurus.txt` | [WordNet 3](https://wordnet.princeton.edu/) synsets via [zaibacu/thesaurus](https://github.com/zaibacu/thesaurus) + adjective similar-to clusters from [wordnet-db](https://github.com/moos/wordnet-db) (WordNet license) | 61k synonym groups with definitions |
 
 On top of that, ~40 rule-based metrics from phonology and style research:
 stress-clash and lapse detection, boundary consonant collisions, alliteration /
@@ -59,6 +62,7 @@ Settings → Pages → Source: **Deploy from a branch** → Branch: `main`, fold
 
 - `node tests/run.mjs` — smoke tests for the analysis engine (run against the
   real data files).
+- `node tests/finder.mjs` — smoke tests for the word finder.
 - `python3 tools/build_data.py` — re-fetch sources and rebuild `data/`.
 - No build step, no dependencies: vanilla ES modules in `js/`.
 
@@ -67,6 +71,7 @@ Settings → Pages → Source: **Deploy from a branch** → Branch: `main`, fold
 ```
 index.html          app shell
 css/style.css       styles (light/dark)
+js/finder.js        word finder: synonym/reverse-dictionary search + sound constraints
 js/analyze.js       the metric battery + findings engine
 js/phonology.js     ARPAbet syllable/stress/cluster analysis
 js/etymology.js     Latinate vs Germanic heuristic
