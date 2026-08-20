@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Merge Claude-generated synonym chunk files into data/synonyms.txt.
 
-Usage: python3 tools/merge_synonyms.py <chunk_dir>
+Usage: python3 tools/merge_synonyms.py <chunk_dir> [<refine_dir>]
 
 Chunk files (out-*.txt) contain lines: word\tP\tsyn syn syn   (P in NVJR).
 Validation: format, headword sanity, synonyms restricted to single lowercase
 words present in the pronouncing dictionary (the finder filters by sound, so
 words without phonemes are dead weight), no self/derivative echoes.
+
+refine_dir files (refined-*.txt) are curation passes over existing entries:
+their lines REPLACE the merged lines for any (word, pos) they cover.
 """
 import re
 import sys
@@ -35,29 +38,56 @@ def main() -> None:
 
     merged: dict[tuple[str, str], list[str]] = {}
     bad_lines = dropped_syns = 0
+
+    def clean_line(raw):
+        nonlocal bad_lines, dropped_syns
+        m = LINE_RE.match(raw)
+        if not m:
+            bad_lines += 1
+            return None
+        word, pos, syn_str = m.groups()
+        syns = []
+        for s in syn_str.split():
+            if s == word or same_family(word, s) or s not in cmu or len(s) < 2:
+                dropped_syns += 1
+                continue
+            if s not in syns:
+                syns.append(s)
+        return (word, pos, syns) if syns else None
+
     for f in sorted(chunk_dir.glob("out-*.txt")):
         for raw in f.read_text().splitlines():
             if not raw.strip():
                 continue
-            m = LINE_RE.match(raw)
-            if not m:
-                bad_lines += 1
+            parsed = clean_line(raw)
+            if not parsed:
                 continue
-            word, pos, syn_str = m.groups()
-            syns = []
-            for s in syn_str.split():
-                if s == word or same_family(word, s) or s not in cmu or len(s) < 2:
-                    dropped_syns += 1
-                    continue
-                if s not in syns:
-                    syns.append(s)
-            if not syns:
-                continue
-            key = (word, pos)
-            existing = merged.setdefault(key, [])
+            word, pos, syns = parsed
+            existing = merged.setdefault((word, pos), [])
             for s in syns:
                 if s not in existing:
                     existing.append(s)
+
+    # Refinement pass: replaces merged lines for covered headwords entirely
+    # (a refined headword's absent POS line means "that line was wrong").
+    if len(sys.argv) > 2:
+        refine_dir = Path(sys.argv[2])
+        refined_words = set()
+        refined: dict[tuple[str, str], list[str]] = {}
+        for f in sorted(refine_dir.glob("refined-*.txt")):
+            for raw in f.read_text().splitlines():
+                if not raw.strip():
+                    continue
+                parsed = clean_line(raw)
+                if not parsed:
+                    continue
+                word, pos, syns = parsed
+                refined_words.add(word)
+                refined.setdefault((word, pos), []).extend(
+                    s for s in syns if s not in refined.get((word, pos), []))
+        merged = {k: v for k, v in merged.items() if k[0] not in refined_words}
+        merged.update(refined)
+        print(f"refined: {len(refined_words)} headwords replaced")
 
     out = repo / "data" / "synonyms.txt"
     lines = [f"{w}\t{p}\t{' '.join(syns)}" for (w, p), syns in sorted(merged.items())]
