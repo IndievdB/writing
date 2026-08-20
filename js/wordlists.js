@@ -151,6 +151,35 @@ export const GERMANIC_SUFFIXES = [
   'some', 'fold',
 ];
 
+// Irregular past-tense forms, for re-inflecting synonym results
+// ("walked" -> search "walk" -> re-inflect "stride" as "strode").
+export const IRREGULAR_PAST = new Map(Object.entries({
+  be: 'was', become: 'became', begin: 'began', bend: 'bent', bite: 'bit',
+  blow: 'blew', break: 'broke', bring: 'brought', build: 'built',
+  burst: 'burst', buy: 'bought', catch: 'caught', choose: 'chose',
+  cling: 'clung', come: 'came', creep: 'crept', cut: 'cut', deal: 'dealt',
+  dig: 'dug', do: 'did', draw: 'drew', drink: 'drank', drive: 'drove',
+  eat: 'ate', fall: 'fell', feed: 'fed', feel: 'felt', fight: 'fought',
+  find: 'found', flee: 'fled', fling: 'flung', fly: 'flew', forget: 'forgot',
+  freeze: 'froze', get: 'got', give: 'gave', go: 'went', grow: 'grew',
+  hang: 'hung', have: 'had', hear: 'heard', hide: 'hid', hit: 'hit',
+  hold: 'held', hurt: 'hurt', keep: 'kept', know: 'knew', lay: 'laid',
+  lead: 'led', leap: 'leapt', leave: 'left', lend: 'lent', let: 'let',
+  lie: 'lay', lose: 'lost', make: 'made', mean: 'meant', meet: 'met',
+  pay: 'paid', put: 'put', quit: 'quit', read: 'read', ride: 'rode',
+  ring: 'rang', rise: 'rose', run: 'ran', say: 'said', see: 'saw',
+  seek: 'sought', sell: 'sold', send: 'sent', set: 'set', shake: 'shook',
+  shine: 'shone', shoot: 'shot', shut: 'shut', sing: 'sang', sink: 'sank',
+  sit: 'sat', sleep: 'slept', slide: 'slid', slink: 'slunk', speak: 'spoke',
+  speed: 'sped', spend: 'spent', spin: 'spun', spring: 'sprang',
+  stand: 'stood', steal: 'stole', stick: 'stuck', sting: 'stung',
+  stride: 'strode', strike: 'struck', swear: 'swore', sweep: 'swept',
+  swim: 'swam', swing: 'swung', take: 'took', teach: 'taught',
+  tear: 'tore', tell: 'told', think: 'thought', throw: 'threw', tread: 'trod',
+  understand: 'understood', wake: 'woke', wear: 'wore', weep: 'wept',
+  win: 'won', wind: 'wound', wring: 'wrung', write: 'wrote',
+}));
+
 // Abbreviations that end with "." but do not end a sentence.
 export const ABBREVIATIONS = new Set([
   'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'st', 'ave', 'blvd', 'rd',

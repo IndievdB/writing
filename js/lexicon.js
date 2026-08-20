@@ -57,12 +57,18 @@ export class Lexicon {
       tries.push([w.slice(0, -1), ' D']);
     }
     if (w.endsWith('ly')) tries.push([w.slice(0, -2), ' L IY0']);
+    if (w.endsWith('er')) {
+      tries.push([w.slice(0, -2), ' ER0'], [w.slice(0, -1), ' ER0'], [w.slice(0, -3), ' ER0']);
+    }
+    if (w.endsWith('est')) {
+      tries.push([w.slice(0, -3), ' IH0 S T'], [w.slice(0, -2), ' IH0 S T'], [w.slice(0, -4), ' IH0 S T']);
+    }
     for (const [stem, suffix] of tries) {
       const p = this.phones.get(stem);
       if (p) return p + suffix;
     }
-    if (w.includes('-')) {
-      const parts = w.split('-').map((p) => this.phonesFor(p));
+    if (/[- ]/.test(w)) {
+      const parts = w.split(/[- ]+/).map((p) => this.phonesFor(p));
       if (parts.every(Boolean)) return parts.join(' ');
     }
     return null;

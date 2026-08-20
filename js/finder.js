@@ -3,7 +3,7 @@
 // rhyme, stress pattern, syllables, texture, origin, concreteness, rarity).
 import { analyzeWord } from './phonology.js';
 import { classifyOrigin } from './etymology.js';
-import { FUNCTION_WORDS } from './wordlists.js';
+import { FUNCTION_WORDS, IRREGULAR_PAST } from './wordlists.js';
 
 // Spelling -> ARPAbet for onset/consonance inputs typed as letters.
 const DIGRAPHS = { ch: 'CH', sh: 'SH', th: 'TH', ph: 'F', wh: 'W', ng: 'NG', qu: 'K W' };
@@ -76,6 +76,7 @@ export class Finder {
     this.infoCache = new Map();
     this.pool = null;         // frequency-ordered candidate words for seedless search
     this.curated = new Map(); // word -> Map(candidate -> weight), Claude-generated
+    this.curatedPos = new Map(); // word -> Set of POS letters (from curated lines)
   }
 
   // Claude-generated synonym file: word \t POS \t syn syn syn.
@@ -87,16 +88,31 @@ export class Finder {
       const m = this.curated.get(a);
       if ((m.get(b) ?? 0) < w) m.set(b, w);
     };
+    const addPos = (w, p) => {
+      if (!this.curatedPos.has(w)) this.curatedPos.set(w, new Set());
+      this.curatedPos.get(w).add(p);
+    };
     for (const line of raw.split('\n')) {
       if (!line) continue;
-      const [word, , synStr] = line.split('\t');
+      const [word, pos, synStr] = line.split('\t');
       if (!word || !synStr) continue;
+      if (pos) addPos(word, pos);
       for (const s of synStr.split(' ')) {
         if (!s || s === word) continue;
         link(word, s, 1.3);
         link(s, word, 1.1);
+        if (pos) addPos(s, pos); // synonyms on a J line are adjectives too
       }
     }
+  }
+
+  // POS capabilities of a word: curated lines are the strongest signal, the
+  // Brill lexicon fills in the rest.
+  posCap(word) {
+    let s = '';
+    const cur = this.curatedPos.get(word);
+    if (cur) s += [...cur].join('');
+    return s + this.lex.posFor(word);
   }
 
   loadThesaurus(raw) {
@@ -152,6 +168,92 @@ export class Finder {
       this.infoCache.set(word, x);
     }
     return x;
+  }
+
+  // ---- inflection-aware search ---------------------------------------------
+  // "faster" is nobody's headword. Detect seed inflections (comparative,
+  // superlative, plural/3rd-person, past, gerund, -ly adverb), search on the
+  // lemma, keep only candidates that can hold the same part of speech, and
+  // re-inflect each result ("faster" -> quicker, speedier, more rapid).
+
+  detectInflection(w) {
+    const known = (x) => x.length >= 2 && (this.curated.has(x) || this.byWord.has(x) || this.lex.freq.has(x));
+    const undouble = (x) => (/(.)\1$/.test(x) ? x.slice(0, -1) : null);
+    const pick = (cands) => cands.filter(Boolean).find(known);
+    const jish = (l) => this.posCap(l).includes('J');
+    const vish = (l) => this.posCap(l).includes('V');
+    let l;
+    if (w.endsWith('ier') && (l = pick([w.slice(0, -3) + 'y'])) && jish(l)) return { lemma: l, kind: 'comparative' };
+    if (w.endsWith('iest') && (l = pick([w.slice(0, -4) + 'y'])) && jish(l)) return { lemma: l, kind: 'superlative' };
+    if (w.endsWith('ing') && w.length > 5 && (l = pick([undouble(w.slice(0, -3)), w.slice(0, -3), w.slice(0, -3) + 'e'])) && vish(l)) return { lemma: l, kind: 'gerund' };
+    if (w.endsWith('ied') && (l = pick([w.slice(0, -3) + 'y'])) && vish(l)) return { lemma: l, kind: 'past' };
+    if (w.endsWith('ed') && w.length > 4 && (l = pick([undouble(w.slice(0, -2)), w.slice(0, -2), w.slice(0, -1)])) && vish(l)) return { lemma: l, kind: 'past' };
+    if (w.endsWith('est') && w.length > 4 && (l = pick([undouble(w.slice(0, -3)), w.slice(0, -3), w.slice(0, -2)])) && jish(l)) return { lemma: l, kind: 'superlative' };
+    if (w.endsWith('er') && w.length > 3 && (l = pick([undouble(w.slice(0, -2)), w.slice(0, -2), w.slice(0, -1)])) && jish(l)) return { lemma: l, kind: 'comparative' };
+    if (w.endsWith('ily') && (l = pick([w.slice(0, -3) + 'y'])) && jish(l)) return { lemma: l, kind: 'adverb' };
+    if (w.endsWith('ly') && w.length > 4 && (l = pick([w.slice(0, -2), w.slice(0, -2) + 'e'])) && jish(l)) return { lemma: l, kind: 'adverb' };
+    if (w.endsWith('ies') && w.length > 4 && (l = pick([w.slice(0, -3) + 'y']))) return { lemma: l, kind: 'sform' };
+    if (w.endsWith('s') && !w.endsWith('ss') && w.length > 3 && (l = pick([w.slice(0, -1), w.slice(0, -2)]))) return { lemma: l, kind: 'sform' };
+    return null;
+  }
+
+  // Surface forms of a candidate lemma under an inflection kind, or null when
+  // the candidate can't hold that part of speech (gating out the "faster ->
+  // accelerate" class of junk).
+  inflectFor(c, kind) {
+    if (c.includes(' ')) return null;
+    const pos = this.posCap(c);
+    const cvc = /[^aeiou][aeiou][^aeiouwxy]$/.test(c) && this.phon(c)?.syllableCount === 1;
+    const dbl = cvc ? c + c[c.length - 1] : c;
+    const yStem = /[^aeiou]y$/.test(c) ? c.slice(0, -1) : null;
+    const ly = () => (yStem ? yStem + 'ily'
+      : c.endsWith('ic') ? c + 'ally'
+      : c.endsWith('le') ? c.slice(0, -1) + 'y'
+      : c.endsWith('ll') ? c + 'y'
+      : c + 'ly');
+    switch (kind) {
+      case 'sform': {
+        if (!/[NV]/.test(pos)) return null;
+        if (yStem) return [yStem + 'ies'];
+        return [/(s|x|z|ch|sh)$/.test(c) ? c + 'es' : c + 's'];
+      }
+      case 'gerund': {
+        if (!pos.includes('V')) return null;
+        const stem = /[^eyoa]e$/.test(c) ? c.slice(0, -1) : dbl;
+        return [stem + 'ing'];
+      }
+      case 'past': {
+        if (!pos.includes('V')) return null;
+        const irr = IRREGULAR_PAST.get(c);
+        if (irr) return [irr];
+        if (yStem) return [yStem + 'ied'];
+        return [c.endsWith('e') ? c + 'd' : dbl + 'ed'];
+      }
+      case 'adverb': {
+        if (!pos.includes('J')) return null;
+        const adv = ly();
+        // Only forms that actually exist: no fabricated "fastly". Flat
+        // adverbs (fast, hard) come back as themselves.
+        if (this.lex.phones.has(adv)) return [adv];
+        return pos.includes('R') ? [c] : null;
+      }
+      case 'comparative':
+      case 'superlative': {
+        if (!pos.includes('J')) return null;
+        const [suf, more] = kind === 'comparative' ? ['er', 'more'] : ['est', 'most'];
+        const n = this.phon(c)?.syllableCount ?? 3;
+        // Participle adjectives (pleased, delighted) never take -er/-est.
+        if (!/(ed|id)$/.test(c) && (n === 1 || (n === 2 && c.endsWith('y')))) {
+          const form = yStem ? yStem + 'i' + suf : c.endsWith('e') ? c + suf.slice(1) : dbl + suf;
+          return [form];
+        }
+        const out = [`${more} ${c}`];
+        const adv = ly();
+        if (this.lex.phones.has(adv)) out.push(`${more} ${adv}`);
+        return out;
+      }
+      default: return [c];
+    }
   }
 
   // ---- meaning search ------------------------------------------------------
@@ -384,30 +486,48 @@ export class Finder {
   // ---- main entry ----------------------------------------------------------
 
   search({ seeds = [], constraints = {}, limit = 120 }) {
+    // Inflection awareness: an inflected seed ("faster", "running", "cats")
+    // searches on its lemma, and every result is re-inflected to match.
+    const originalSeeds = new Set(seeds);
+    let kind = null;
+    seeds = seeds.map((s) => {
+      const d = this.detectInflection(s);
+      // Re-inflect results only for single-seed queries: in "walk slowly"
+      // the inflected word is a modifier, not the form the user wants back.
+      if (d && seeds.length === 1) kind = d.kind;
+      return d ? d.lemma : s;
+    });
+
     const { tests, soft } = this.compileConstraints(constraints);
     const hasConstraints = tests.length > 0 || soft.length > 0;
     const results = [];
 
     const consider = (word, base) => {
-      const info = this.info(word);
-      if (!info) return;
-      const p = info.phon;
-      for (const t of tests) if (!t(p, word)) return;
-      let score = base.score;
-      for (const s of soft) score += s(p) * 0.8;
-      // Prefer common words a little (log-scaled), unless the user asked rare.
-      const rank = info.freqRank ?? 200000;
-      if (constraints.rarity === 'rare') {
-        if (rank < 8000) return;
-        score += Math.log10(rank) * 0.1;
-      } else {
-        if (constraints.rarity === 'common' && rank > 5000) return;
-        score += (5.4 - Math.log10(rank)) * 0.12;
+      const surfaces = kind ? this.inflectFor(word, kind) : [word];
+      if (!surfaces) return; // wrong part of speech for the seed's inflection
+      for (const surface of surfaces) {
+        if (originalSeeds.has(surface)) continue;
+        const info = this.info(surface);
+        if (!info) continue;
+        const p = info.phon;
+        if (!tests.every((t) => t(p, surface))) continue;
+        let score = base.score;
+        for (const s of soft) score += s(p) * 0.8;
+        // Prefer common words a little (log-scaled), unless the user asked
+        // rare. Inflected surfaces score by their lemma's frequency.
+        const rank = info.freqRank ?? this.lex.freqRank(word) ?? 200000;
+        if (constraints.rarity === 'rare') {
+          if (rank < 8000) continue;
+          score += Math.log10(rank) * 0.1;
+        } else {
+          if (constraints.rarity === 'common' && rank > 5000) continue;
+          score += (5.4 - Math.log10(rank)) * 0.12;
+        }
+        if (constraints.origin && info.ety.origin !== constraints.origin) continue;
+        if (constraints.feel === 'concrete' && !(info.conc >= 350)) continue;
+        if (constraints.feel === 'abstract' && !(info.conc != null && info.conc <= 260)) continue;
+        results.push({ word: surface, score, info, reasons: [...base.reasons] });
       }
-      if (constraints.origin && info.ety.origin !== constraints.origin) return;
-      if (constraints.feel === 'concrete' && !(info.conc >= 350)) return;
-      if (constraints.feel === 'abstract' && !(info.conc != null && info.conc <= 260)) return;
-      results.push({ word, score, info, reasons: [...base.reasons] });
     };
 
     if (seeds.length) {
@@ -427,8 +547,15 @@ export class Finder {
         if (results.length >= cap) break;
       }
     }
-    results.sort((a, b) => b.score - a.score ||
-      (a.info.freqRank ?? 1e9) - (b.info.freqRank ?? 1e9));
-    return results.slice(0, limit);
+    // Two lemmas can inflect to the same surface — keep the best-scored one.
+    const bySurface = new Map();
+    for (const r of results) {
+      const prev = bySurface.get(r.word);
+      if (!prev || r.score > prev.score) bySurface.set(r.word, r);
+    }
+    return [...bySurface.values()]
+      .sort((a, b) => b.score - a.score ||
+        (a.info.freqRank ?? 1e9) - (b.info.freqRank ?? 1e9))
+      .slice(0, limit);
   }
 }

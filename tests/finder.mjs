@@ -97,5 +97,20 @@ if (curated) {
     words(sad).slice(0, 10).join(','));
 }
 
+// Inflection-aware search: inflected seeds return same-form results.
+if (curated) {
+  const faster = finder.search({ seeds: ['faster'] });
+  check('faster → quicker/swifter/speedier', ['quicker', 'swifter', 'speedier'].every((w) => words(faster).slice(0, 12).includes(w)),
+    words(faster).slice(0, 8).join(','));
+  check('faster → periphrastic "more rapidly"', words(faster).some((w) => w.startsWith('more ')));
+  check('faster: no bare verbs like accelerate', !words(faster).includes('accelerate') && !words(faster).includes('speed'));
+  const quickly = finder.search({ seeds: ['quickly'] });
+  check('quickly → swiftly/rapidly, no fabricated fastly', words(quickly).slice(0, 10).includes('swiftly') && !words(quickly).includes('fastly'),
+    words(quickly).slice(0, 8).join(','));
+  const walked = finder.search({ seeds: ['walked'] });
+  check('walked → strolled/marched (past forms)', ['strolled', 'marched', 'paced'].some((w) => words(walked).slice(0, 10).includes(w)),
+    words(walked).slice(0, 8).join(','));
+}
+
 console.log(failures ? `\n${failures} failure(s)` : '\nAll finder checks passed');
 process.exit(failures ? 1 : 0);
