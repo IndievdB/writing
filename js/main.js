@@ -185,13 +185,13 @@ function hidePopup() {
   clearTimeout(popupTimer);
   els.defPopup.hidden = true;
 }
-els.finderResults.addEventListener('mouseover', (e) => {
+els.finderResults?.addEventListener('mouseover', (e) => {
   const chip = e.target.closest('.word-chip');
   if (!chip) return;
   clearTimeout(popupTimer);
   popupTimer = setTimeout(() => showPopup(chip), 220);
 });
-els.finderResults.addEventListener('mouseout', (e) => {
+els.finderResults?.addEventListener('mouseout', (e) => {
   if (e.target.closest('.word-chip')) hidePopup();
 });
 window.addEventListener('scroll', hidePopup, { passive: true });
@@ -214,18 +214,18 @@ function insertWord(word) {
 
 let timer = null;
 const queueRun = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
-els.input.addEventListener('input', queueRun);
+els.input?.addEventListener('input', queueRun);
 
 let finderTimer = null;
 const queueFinder = () => { clearTimeout(finderTimer); finderTimer = setTimeout(runFinder, 250); };
-els.seedInput.addEventListener('input', queueFinder);
-els.slWord.addEventListener('input', () => { rebuildSlChips(); queueFinder(); });
-els.slPos.addEventListener('change', queueFinder);
+els.seedInput?.addEventListener('input', queueFinder);
+els.slWord?.addEventListener('input', () => { rebuildSlChips(); queueFinder(); });
+els.slPos?.addEventListener('change', queueFinder);
 for (const el of Object.values(constraintEls)) {
-  el.addEventListener('input', queueFinder);
-  el.addEventListener('change', queueFinder);
+  el?.addEventListener('input', queueFinder);
+  el?.addEventListener('change', queueFinder);
 }
-els.finderClear.addEventListener('click', () => {
+els.finderClear?.addEventListener('click', () => {
   els.seedInput.value = '';
   els.slWord.value = '';
   els.slPos.value = 'any';
@@ -235,7 +235,7 @@ els.finderClear.addEventListener('click', () => {
 });
 
 // Word inspector.
-els.annotated.addEventListener('click', (e) => {
+els.annotated?.addEventListener('click', (e) => {
   const tok = e.target.closest('.tok.word');
   if (!tok || !lastResult) return;
   const s = lastResult.sentences[Number(tok.dataset.si)];
@@ -244,7 +244,7 @@ els.annotated.addEventListener('click', (e) => {
 });
 
 // "Find alternatives" from the inspector: seed the finder with that word.
-els.inspector.addEventListener('click', (e) => {
+els.inspector?.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-find-word]');
   if (!btn) return;
   els.seedInput.value = btn.dataset.findWord;
@@ -319,7 +319,7 @@ async function loadNeural() {
     sp.neural.disabled = false;
   }
 }
-sp.neural.addEventListener('click', loadNeural);
+sp.neural?.addEventListener('click', loadNeural);
 
 function stopSpeaking() {
   stopSystem();
@@ -352,10 +352,10 @@ async function speakText(text) {
   }
 }
 
-sp.speak.addEventListener('click', () => speakText(els.input.value));
-sp.stop.addEventListener('click', stopSpeaking);
-sp.voice.addEventListener('change', () => localStorage.setItem('cadence-voice', sp.voice.value));
-els.inspector.addEventListener('click', (e) => {
+sp.speak?.addEventListener('click', () => speakText(els.input.value));
+sp.stop?.addEventListener('click', stopSpeaking);
+sp.voice?.addEventListener('change', () => localStorage.setItem('cadence-voice', sp.voice.value));
+els.inspector?.addEventListener('click', (e) => {
   const b = e.target.closest('.wi-speak');
   if (b) speakText(b.dataset.word);
 });
