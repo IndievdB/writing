@@ -1,22 +1,16 @@
-// App wiring: data loading, input handling, lens tabs, theme toggle.
+// App wiring: data loading, input handling, theme toggle.
 import { Lexicon } from './lexicon.js';
 import { analyzeText } from './analyze.js';
 import { Finder } from './finder.js';
-import { renderResults, renderInspector, renderCompare, renderFinderResults, markSpeakingWord, LENS_LEGENDS } from './ui.js';
+import { renderResults, renderInspector, renderFinderResults, markSpeakingWord } from './ui.js';
 import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES } from './speech.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
   input: $('text-input'), status: $('status'), results: $('results'),
-  overallScore: $('overall-score'), overallDesc: $('overall-desc'),
-  meters: $('category-meters'), rhythmStrip: $('rhythm-strip'),
-  annotated: $('annotated'), lensLegend: $('lens-legend'),
-  inspector: $('word-inspector'), findings: $('findings'),
-  findingCount: $('finding-count'), metricTables: $('metric-tables'),
-  readability: $('readability'),
-  revisionWrap: $('revision-wrap'), revisionInput: $('revision-input'),
-  revisionToggle: $('revision-toggle'),
-  comparePanel: $('compare-panel'), compareBody: $('compare-body'),
+  rhythmStrip: $('rhythm-strip'),
+  annotated: $('annotated'),
+  inspector: $('word-inspector'),
   seedInput: $('seed-input'), finderStatus: $('finder-status'),
   finderResults: $('finder-results'), finderClear: $('finder-clear'),
 };
@@ -25,13 +19,6 @@ const constraintEls = {
   rhyme: $('c-rhyme'), syll: $('c-syll'), stress: $('c-stress'),
   texture: $('c-texture'), origin: $('c-origin'), feel: $('c-feel'),
   rarity: $('c-rarity'),
-};
-
-const EXAMPLES = {
-  choppy: 'The big dog barked. The mad cat hissed. The old man yelled. The day went bad. The night got worse.',
-  sludge: 'The implementation of the organizational transformation necessitates the utilization of additional resources to facilitate the optimization of operational effectiveness.',
-  twister: 'The crisp splash struck; strengths stripped, sixths slipped past stressed guests.',
-  smooth: 'When I was a boy, the river ran clear past our house, and we swam in it every warm evening until the light failed.',
 };
 
 const lexicon = new Lexicon();
@@ -69,46 +56,24 @@ async function loadData() {
 function run() {
   if (!lexicon.ready) return;
   const text = els.input.value;
-  if (!text.trim()) { els.results.hidden = true; els.comparePanel.hidden = true; return; }
+  if (!text.trim()) { els.results.hidden = true; return; }
   lastResult = analyzeText(text, lexicon);
-
-  // Compare mode: when a revision exists, findings/annotations show the
-  // revision (the thing being worked on); the compare panel shows the deltas.
-  const revText = els.revisionWrap.hidden ? '' : els.revisionInput.value;
-  if (revText.trim()) {
-    const revised = analyzeText(revText, lexicon);
-    renderCompare(lastResult, revised, els.compareBody);
-    els.comparePanel.hidden = false;
-    lastResult = revised;
-  } else {
-    els.comparePanel.hidden = true;
-  }
-
   renderResults(lastResult, els);
   els.results.hidden = false;
   els.inspector.hidden = true;
   saveHash();
 }
 
-// Shareable URLs: keep the text (and revision) in the location hash.
+// Shareable URLs: keep the sentence in the location hash.
 function saveHash() {
   const t = els.input.value;
-  const r = els.revisionWrap.hidden ? '' : els.revisionInput.value;
-  const hash = t.trim()
-    ? '#t=' + encodeURIComponent(t) + (r.trim() ? '&r=' + encodeURIComponent(r) : '')
-    : '';
+  const hash = t.trim() ? '#t=' + encodeURIComponent(t) : '';
   history.replaceState(null, '', hash || location.pathname);
 }
 
 function restoreHash() {
-  const m = location.hash.match(/^#t=([^&]*)(?:&r=(.*))?$/);
-  if (!m) return;
-  els.input.value = decodeURIComponent(m[1]);
-  if (m[2]) {
-    els.revisionInput.value = decodeURIComponent(m[2]);
-    els.revisionWrap.hidden = false;
-    els.revisionToggle.textContent = 'hide revision';
-  }
+  const m = location.hash.match(/^#t=([^&]*)/);
+  if (m) els.input.value = decodeURIComponent(m[1]);
 }
 
 // ---- word finder ----
@@ -144,7 +109,6 @@ function insertWord(word) {
 let timer = null;
 const queueRun = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
 els.input.addEventListener('input', queueRun);
-els.revisionInput.addEventListener('input', queueRun);
 
 let finderTimer = null;
 const queueFinder = () => { clearTimeout(finderTimer); finderTimer = setTimeout(runFinder, 250); };
@@ -158,38 +122,6 @@ els.finderClear.addEventListener('click', () => {
   for (const el of Object.values(constraintEls)) el.value = '';
   runFinder();
 });
-
-els.revisionToggle.addEventListener('click', () => {
-  const show = els.revisionWrap.hidden;
-  els.revisionWrap.hidden = !show;
-  els.revisionToggle.textContent = show ? 'hide revision' : 'compare a revision';
-  if (show && !els.revisionInput.value.trim()) {
-    els.revisionInput.value = els.input.value;
-    els.revisionInput.focus();
-  }
-  run();
-});
-
-document.querySelectorAll('[data-example]').forEach((btn) => {
-  btn.addEventListener('click', () => {
-    els.input.value = EXAMPLES[btn.dataset.example];
-    run();
-  });
-});
-
-// Lens tabs.
-const annotatedPanel = els.annotated;
-function setLens(lens) {
-  annotatedPanel.className = `annotated lens-${lens}`;
-  els.lensLegend.textContent = LENS_LEGENDS[lens];
-  document.querySelectorAll('.lens-tabs [role="tab"]').forEach((b) => {
-    b.setAttribute('aria-selected', String(b.dataset.lens === lens));
-  });
-}
-document.querySelectorAll('.lens-tabs [role="tab"]').forEach((b) => {
-  b.addEventListener('click', () => setLens(b.dataset.lens));
-});
-setLens('problems');
 
 // Word inspector.
 els.annotated.addEventListener('click', (e) => {
@@ -220,8 +152,6 @@ const sp = {
 };
 const neuralTTS = new NeuralTTS();
 let speaking = false;
-let lastTextEl = els.input;
-[els.input, els.revisionInput].forEach((t) => t.addEventListener('focus', () => { lastTextEl = t; }));
 
 function speechStatus(msg) { sp.status.textContent = msg ?? ''; }
 
@@ -311,7 +241,7 @@ async function speakText(text) {
   }
 }
 
-sp.speak.addEventListener('click', () => speakText(lastTextEl.value.trim() ? lastTextEl.value : els.input.value));
+sp.speak.addEventListener('click', () => speakText(els.input.value));
 sp.stop.addEventListener('click', stopSpeaking);
 sp.voice.addEventListener('change', () => localStorage.setItem('cadence-voice', sp.voice.value));
 els.inspector.addEventListener('click', (e) => {

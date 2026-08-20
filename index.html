@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Cadence — word finder &amp; sentence builder</title>
-<meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and build sentences with live flow analysis. No AI — pure phonology and dictionaries.">
+<meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -17,49 +17,13 @@
 </header>
 
 <main>
-  <section class="input-card">
-    <label for="text-input" class="visually-hidden">Text to analyze</label>
-    <textarea id="text-input" rows="4" spellcheck="true" autofocus
-      placeholder="Paste a fragment, a sentence, or a few sentences…"></textarea>
-    <div id="revision-wrap" hidden>
-      <label for="revision-input" class="revision-label">Revision — rewrite it here and watch the deltas:</label>
-      <textarea id="revision-input" rows="4" spellcheck="true"
-        placeholder="Your rewrite of the text above…"></textarea>
-    </div>
-    <div class="speech-row" role="group" aria-label="Read aloud">
-      <button type="button" id="speak-btn" title="Read the sentence aloud">▶ Read aloud</button>
-      <button type="button" id="stop-speak" title="Stop">■</button>
-      <label class="visually-hidden" for="voice-select">Voice</label>
-      <select id="voice-select"></select>
-      <label class="visually-hidden" for="rate-select">Speed</label>
-      <select id="rate-select">
-        <option value="0.8">slow</option>
-        <option value="1" selected>normal</option>
-        <option value="1.2">fast</option>
-      </select>
-      <button type="button" id="neural-load" title="Download a neural voice that runs in your browser and is cached for offline use">get neural voice (~90 MB, cached)</button>
-      <span id="speech-status" class="status" role="status"></span>
-    </div>
-    <div class="input-row">
-      <div class="examples" role="group" aria-label="Example texts">
-        <span class="examples-label">Try:</span>
-        <button type="button" data-example="choppy">choppy</button>
-        <button type="button" data-example="sludge">corporate sludge</button>
-        <button type="button" data-example="twister">tongue-twister</button>
-        <button type="button" data-example="smooth">smooth</button>
-        <button type="button" id="revision-toggle" class="revision-toggle">compare a revision</button>
-      </div>
-      <span id="status" class="status" role="status">loading dictionaries…</span>
-    </div>
-  </section>
-
   <section class="panel finder-panel">
     <div class="panel-head">
       <h2>Word finder</h2>
       <button type="button" id="finder-clear" class="finder-clear">clear</button>
     </div>
     <label for="seed-input" class="visually-hidden">Meaning</label>
-    <input id="seed-input" type="text" autocomplete="off" spellcheck="false"
+    <input id="seed-input" type="text" autocomplete="off" spellcheck="false" autofocus
       placeholder="Meaning — one word: “big”, “faster”, “whisper”… or leave empty to search by sound alone">
     <div class="constraint-grid">
       <label>Alliterates with
@@ -103,67 +67,53 @@
     <div id="finder-results" class="finder-results" aria-live="polite"></div>
   </section>
 
-  <section id="compare-panel" class="panel compare-panel" hidden>
-    <h2>Original → revision</h2>
-    <div id="compare-body"></div>
+  <section class="input-card">
+    <label for="text-input" class="visually-hidden">Your sentence</label>
+    <textarea id="text-input" rows="4" spellcheck="true"
+      placeholder="Build your sentence here — click a found word to insert it…"></textarea>
+    <div class="speech-row" role="group" aria-label="Read aloud">
+      <button type="button" id="speak-btn" title="Read the sentence aloud">▶ Read aloud</button>
+      <button type="button" id="stop-speak" title="Stop">■</button>
+      <label class="visually-hidden" for="voice-select">Voice</label>
+      <select id="voice-select"></select>
+      <label class="visually-hidden" for="rate-select">Speed</label>
+      <select id="rate-select">
+        <option value="0.8">slow</option>
+        <option value="1" selected>normal</option>
+        <option value="1.2">fast</option>
+      </select>
+      <button type="button" id="neural-load" title="Download a neural voice that runs in your browser and is cached for offline use">get neural voice (~90 MB, cached)</button>
+      <span id="speech-status" class="status" role="status"></span>
+    </div>
+    <div class="input-row">
+      <span id="status" class="status" role="status">loading dictionaries…</span>
+    </div>
   </section>
 
   <section id="results" class="results" hidden>
-    <div class="score-row">
-      <div class="hero-tile">
-        <div class="hero-label">Flow score</div>
-        <div class="hero-value"><span id="overall-score">–</span><span class="hero-max">/100</span></div>
-        <div class="hero-desc" id="overall-desc"></div>
-      </div>
-      <div class="meters" id="category-meters"></div>
-    </div>
-
     <div class="panel">
       <h2>Rhythm</h2>
       <p class="panel-hint">One block per syllable — tall = stressed, short = unstressed.
-        Marked seams are stress clashes (two beats colliding).</p>
+        Red seams are stress clashes (two beats colliding).</p>
       <div id="rhythm-strip"></div>
     </div>
 
     <div class="panel">
-      <div class="panel-head">
-        <h2>Annotated text</h2>
-        <div class="lens-tabs" role="tablist" aria-label="Annotation lens">
-          <button role="tab" data-lens="problems" aria-selected="true">Problems</button>
-          <button role="tab" data-lens="stress" aria-selected="false">Stress</button>
-          <button role="tab" data-lens="sound" aria-selected="false">Sounds</button>
-          <button role="tab" data-lens="origin" aria-selected="false">Etymology</button>
-        </div>
-      </div>
-      <div id="annotated" class="annotated" aria-live="polite"></div>
-      <p class="panel-hint" id="lens-legend"></p>
+      <h2>Stresses</h2>
+      <div id="annotated" class="annotated lens-stress" aria-live="polite"></div>
+      <p class="panel-hint">Bold = carries stress, gray = unstressed. Click any word for
+        its phonetics — and to find alternatives.</p>
       <div id="word-inspector" class="word-inspector" hidden></div>
     </div>
-
-    <div class="panel">
-      <h2>Findings <span id="finding-count" class="count-badge"></span></h2>
-      <ol id="findings" class="findings"></ol>
-    </div>
-
-    <details class="panel details-panel">
-      <summary><h2>Every metric (table view)</h2></summary>
-      <div id="metric-tables"></div>
-      <h3>Readability formulas</h3>
-      <div id="readability"></div>
-    </details>
   </section>
 
   <section id="about" class="panel about">
     <h2>How it works</h2>
-    <p>The word finder searches 60,000 WordNet synonym groups and their definitions
-      (a built-in reverse dictionary), then filters by sound using the CMU
-      Pronouncing Dictionary — 125,000 words with phonemes and stress. The sentence
-      box runs the same phonology through ~40 rule-based flow metrics: stress
-      clashes and lapses, consonant pileups at word seams, alliteration and
-      accidental rhyme, Latinate density, modifier pileups, clause shape, and more.
-      The full catalog, with explanations, is in
-      <a href="https://github.com/IndievdB/writing/blob/main/METRICS.md">METRICS.md</a>.
-      Nothing leaves your browser.</p>
+    <p>The word finder searches a 17,000-headword curated synonym set (plus WordNet
+      as fallback), then filters by sound using the CMU Pronouncing Dictionary —
+      125,000 words with phonemes and stress. Inflected searches work: “faster”
+      finds quicker, swifter, speedier. The sentence box shows the stress rhythm
+      of what you build and reads it aloud. Nothing leaves your browser.</p>
   </section>
 </main>
 
