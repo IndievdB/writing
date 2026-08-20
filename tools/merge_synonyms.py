@@ -20,7 +20,7 @@ def same_family(a: str, b: str) -> bool:
     if a == b:
         return True
     a, b = (a, b) if len(a) <= len(b) else (b, a)
-    for base in (a, a[:-1]):
+    for base in (a, a[:-1], a + a[-1]):   # exact, e-dropped, consonant-doubled
         if b.startswith(base):
             rest = b[len(base):]
             if rest in DERIV or len(rest) <= 1:
