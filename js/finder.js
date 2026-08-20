@@ -34,6 +34,28 @@ function lettersToPhones(input) {
   return phones;
 }
 
+// Derivational suffixes: seed + one of these = same lemma family, useless as
+// a "synonym" ("walk" -> walking, walker, walkway).
+const DERIV_SUFFIXES = ['s', 'es', 'ed', 'd', 'ing', 'er', 'ers', 'or', 'ly',
+  'ness', 'ment', 'tion', 'ion', 'al', 'ful', 'less', 'able', 'ible', 'y',
+  'ish', 'like',
+  // phrasal compounds: walkway, walkout, runup, breakdown…
+  'way', 'ways', 'out', 'over', 'about', 'up', 'down', 'off', 'in', 'on',
+  'away', 'back', 'through'];
+
+function sameFamily(seed, cand) {
+  if (seed === cand) return true;
+  const [a, b] = seed.length <= cand.length ? [seed, cand] : [cand, seed];
+  // Bases: exact, e-dropped (make→making), consonant-doubled (run→running).
+  for (const base of [a, a.slice(0, -1), a + a[a.length - 1]]) {
+    if (base && b.startsWith(base)) {
+      const rest = b.slice(base.length);
+      if (DERIV_SUFFIXES.includes(rest) || rest.length <= 1) return true;
+    }
+  }
+  return false;
+}
+
 const stem = (w) => {
   const out = [w];
   if (w.endsWith('ies') && w.length > 4) out.push(w.slice(0, -3) + 'y');
@@ -53,6 +75,28 @@ export class Finder {
     this.phonCache = new Map();
     this.infoCache = new Map();
     this.pool = null;         // frequency-ordered candidate words for seedless search
+    this.curated = new Map(); // word -> Map(candidate -> weight), Claude-generated
+  }
+
+  // Claude-generated synonym file: word \t POS \t syn syn syn.
+  // Forward links are strongest; being listed as someone's synonym is nearly
+  // as strong, so the closure is built symmetric.
+  loadSynonyms(raw) {
+    const link = (a, b, w) => {
+      if (!this.curated.has(a)) this.curated.set(a, new Map());
+      const m = this.curated.get(a);
+      if ((m.get(b) ?? 0) < w) m.set(b, w);
+    };
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      const [word, , synStr] = line.split('\t');
+      if (!word || !synStr) continue;
+      for (const s of synStr.split(' ')) {
+        if (!s || s === word) continue;
+        link(word, s, 1.3);
+        link(s, word, 1.1);
+      }
+    }
   }
 
   loadThesaurus(raw) {
@@ -116,6 +160,7 @@ export class Finder {
     const cand = new Map(); // word -> {score, matched:Set<seed>, reasons:Set}
     const bump = (word, seed, score, reason) => {
       if (seeds.includes(word)) return;
+      if (seeds.some((s) => sameFamily(s, word))) return; // walk -> walking is noise
       let c = cand.get(word);
       if (!c) { c = { score: 0, matched: new Set(), reasons: new Set(), hits: new Map() }; cand.set(word, c); }
       // Diminishing returns per seed: co-occurring with a polysemous seed in
@@ -126,7 +171,10 @@ export class Finder {
       c.matched.add(seed);
       if (c.reasons.size < 3) c.reasons.add(reason);
     };
-    // Per-seed neighborhood (direct + one-hop members) for the gloss bridge.
+    // Per-seed neighborhood for the gloss bridge: DIRECT synonyms only
+    // (WordNet direct members + curated links). One-hop chains are scored as
+    // candidates but never used as bridge equivalences — "walk→pass→draw"
+    // must not make "draw" count as meaning "walk".
     const hood = new Map();
     for (const rawSeed of seeds) {
       const neighborhood = new Set();
@@ -134,16 +182,35 @@ export class Finder {
       // Only the first stem with any signal generates candidates; the other
       // stems ("slowly"→"slow") feed the bridge neighborhood only, so their
       // unrelated senses (slow = dull-witted) don't pollute the results.
-      const primary = stems.find((s) => this.byWord.has(s) || this.byGloss.has(s)) ?? stems[0];
+      const primary = stems.find((s) => this.curated.has(s) || this.byWord.has(s) || this.byGloss.has(s)) ?? stems[0];
       for (const seed of stems) {
         const isPrimary = seed === primary;
+
+        // Curated (Claude-generated) synonyms: the strongest signal, plus a
+        // shallow second hop through the curated graph only.
+        const cur = this.curated.get(seed);
+        if (cur) {
+          for (const [m, w] of cur) {
+            if (isPrimary) bump(m, rawSeed, w, `synonym of “${rawSeed}”`);
+            neighborhood.add(m);
+            if (!isPrimary) continue;
+            const second = this.curated.get(m);
+            if (second && second.size <= 30 && w >= 1.2) {
+              for (const [n, w2] of second) {
+                if (n === seed || cur.has(n)) continue;
+                if (w2 >= 1.2) bump(n, rawSeed, 0.35, `near “${rawSeed}” (via ${m})`);
+              }
+            }
+          }
+        }
+
         const direct = this.byWord.get(seed) ?? [];
         const directMembers = new Set();
         for (const si of direct) {
           for (const m of this.synsets[si].members) {
             if (m === seed) continue;
             directMembers.add(m);
-            if (isPrimary) bump(m, rawSeed, 1.0, `synonym of “${rawSeed}”`);
+            if (isPrimary) bump(m, rawSeed, 0.8, `synonym of “${rawSeed}”`);
           }
         }
         // One hop out: synonyms-of-synonyms, at reduced weight.
@@ -153,8 +220,7 @@ export class Finder {
             if (syn.members.length > 12) continue;
             for (const n of syn.members) {
               if (n !== seed && !directMembers.has(n)) {
-                if (isPrimary) bump(n, rawSeed, 0.3, `near “${rawSeed}” (via ${m})`);
-                neighborhood.add(n);
+                if (isPrimary) bump(n, rawSeed, 0.2, `near “${rawSeed}” (via ${m})`);
               }
             }
           }
@@ -163,7 +229,7 @@ export class Finder {
         if (isPrimary) {
           for (const si of this.byGloss.get(seed) ?? []) {
             for (const m of this.synsets[si].members) {
-              bump(m, rawSeed, 0.55, `defined with “${rawSeed}”`);
+              bump(m, rawSeed, 0.45, `defined with “${rawSeed}”`);
             }
           }
         }
@@ -214,7 +280,7 @@ export class Finder {
             return false;
           });
           if (coversAll) {
-            c.score += 1.0;
+            c.score += 0.8;
             seeds.forEach((s) => c.matched.add(s));
             if (c.reasons.size < 3) c.reasons.add('definition matches the whole query');
             break;

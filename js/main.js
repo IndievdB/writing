@@ -52,7 +52,12 @@ async function loadData() {
     }));
     lexicon.load({ cmudict: texts[0], pos: texts[1], conc: texts[2], freq: texts[3] });
     finder.loadThesaurus(texts[4]);
-    els.status.textContent = `ready — ${lexicon.phones.size.toLocaleString()} words, ${finder.synsets.length.toLocaleString()} synonym groups`;
+    // Curated synonym layer (Claude-generated at build time) — optional file.
+    try {
+      const res = await fetch('data/synonyms.txt');
+      if (res.ok) finder.loadSynonyms(await res.text());
+    } catch { /* absent locally is fine; WordNet still works */ }
+    els.status.textContent = `ready — ${lexicon.phones.size.toLocaleString()} words, ${finder.curated.size.toLocaleString()} curated entries, ${finder.synsets.length.toLocaleString()} synonym groups`;
     run();
     runFinder();
   } catch (e) {

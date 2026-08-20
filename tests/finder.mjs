@@ -12,6 +12,8 @@ const lex = new Lexicon();
 lex.load({ cmudict: read('cmudict.txt'), pos: read('pos.txt'), conc: read('conc.txt'), freq: read('freq.txt') });
 const finder = new Finder(lex);
 finder.loadThesaurus(read('thesaurus.txt'));
+let curated = false;
+try { finder.loadSynonyms(read('synonyms.txt')); curated = true; } catch { /* not built yet */ }
 
 let failures = 0;
 const check = (name, cond, extra = '') => {
@@ -76,6 +78,24 @@ check('empty query → empty', finder.search({}).length === 0);
 // Multi-seed boost: word related to both seeds outranks single-seed match.
 const cold = finder.search({ seeds: ['cold', 'wind'] });
 check('multi-seed search returns results', cold.length > 0, words(cold).slice(0, 8).join(','));
+
+// No morphological derivatives of the seed in results.
+const walkPlain = finder.search({ seeds: ['walk'] });
+check('walk: no walking/walkway derivatives', !words(walkPlain).some((w) => /^walk/.test(w)),
+  words(walkPlain).slice(0, 10).join(','));
+
+if (curated) {
+  const whisper = finder.search({ seeds: ['whisper'] });
+  check('curated: whisper → murmur/mutter', ['murmur', 'mutter'].some((w) => words(whisper).slice(0, 10).includes(w)),
+    words(whisper).slice(0, 10).join(','));
+  check('curated: whisper has rich results', whisper.length >= 12, String(whisper.length));
+  const run = finder.search({ seeds: ['run'] });
+  check('curated: run → sprint/dash/jog near top', ['sprint', 'dash', 'jog'].some((w) => words(run).slice(0, 10).includes(w)),
+    words(run).slice(0, 10).join(','));
+  const sad = finder.search({ seeds: ['sad'] });
+  check('curated: sad → unhappy/mournful/gloomy', ['unhappy', 'mournful', 'gloomy', 'sorrowful'].some((w) => words(sad).slice(0, 10).includes(w)),
+    words(sad).slice(0, 10).join(','));
+}
 
 console.log(failures ? `\n${failures} failure(s)` : '\nAll finder checks passed');
 process.exit(failures ? 1 : 0);
