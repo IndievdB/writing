@@ -100,3 +100,6 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# Definitions merge is separate: tools/merge_definitions.py

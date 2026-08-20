@@ -56,6 +56,19 @@ export class Finder {
     this.pool = null;         // frequency-ordered candidate words for seedless search
     this.curated = new Map(); // word -> Map(candidate -> weight), Claude-generated
     this.curatedPos = new Map(); // word -> Set of POS letters (from curated lines)
+    this.defs = new Map();    // word -> [{pos, gloss}], curated definitions
+  }
+
+  // Curated definitions file: word \t POS \t definition (1-3 lines per word).
+  loadDefinitions(raw) {
+    for (const line of raw.split('\n')) {
+      if (!line) continue;
+      const [word, pos, gloss] = line.split('\t');
+      if (!word || !gloss) continue;
+      if (!this.defs.has(word)) this.defs.set(word, []);
+      const list = this.defs.get(word);
+      if (list.length < 3) list.push({ pos: pos || '', gloss });
+    }
   }
 
   // Claude-generated synonym file: word \t POS \t syn syn syn.
@@ -122,14 +135,20 @@ export class Finder {
     return s.glossSet;
   }
 
-  // WordNet definitions for a word (or its lemma), up to `limit` senses.
-  // Returns [{pos, gloss}] — pos is N/V/J/R or ''.
+  // Definitions for a word (or its lemma), up to `limit` senses: curated
+  // definitions first, WordNet glosses as fallback.
   definitionsFor(word, limit = 4) {
     const w = word.toLowerCase().replace(/[^a-z'\-]/g, '');
     if (!w) return [];
     const candidates = [...new Set(stem(w))];
     const d = this.detectInflection(w);
     if (d) candidates.push(d.lemma);
+    for (const c of candidates) {
+      const cur = this.defs.get(c);
+      if (cur?.length) {
+        return cur.slice(0, limit).map((x) => ({ ...x, of: c === w ? null : c }));
+      }
+    }
     for (const c of candidates) {
       const out = [];
       const seen = new Set();
