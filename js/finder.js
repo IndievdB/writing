@@ -244,8 +244,7 @@ export class Finder {
         const n = this.phon(c)?.syllableCount ?? 3;
         // Participle adjectives (pleased, delighted) never take -er/-est.
         if (!/(ed|id)$/.test(c) && (n === 1 || (n === 2 && c.endsWith('y')))) {
-          const form = yStem ? yStem + 'i' + suf : c.endsWith('e') ? c + suf.slice(1) : dbl + suf;
-          return [form];
+          return [yStem ? yStem + 'i' + suf : c.endsWith('e') ? c + suf.slice(1) : dbl + suf];
         }
         const out = [`${more} ${c}`];
         const adv = ly();
@@ -290,48 +289,74 @@ export class Finder {
 
         // Curated (Claude-generated) synonyms: the strongest signal, plus a
         // shallow second hop through the curated graph only.
+        // When a seed has curated synonyms, use ONLY the curated graph —
+        // WordNet synsets and gloss matches are fallback for uncovered words,
+        // not extra noise for covered ones ("fast" gloss-matching destroyer,
+        // "a small fast warship").
+        const curatedOnly = stems.some((s) => this.curated.has(s));
         const cur = this.curated.get(seed);
         if (cur) {
           for (const [m, w] of cur) {
             if (isPrimary) bump(m, rawSeed, w, `synonym of “${rawSeed}”`);
             neighborhood.add(m);
-            if (!isPrimary) continue;
-            const second = this.curated.get(m);
-            if (second && second.size <= 30 && w >= 1.2) {
+          }
+          // One-hop expansion with triangle anchoring: a candidate reached
+          // through a single intermediate is polysemy bait (sad -> blue ->
+          // navy). Keep it only when it connects back to the seed's sense by
+          // a second path: two distinct intermediates, its own entry linking
+          // the seed, or its entry linking another of the seed's synonyms.
+          if (isPrimary) {
+            const hopVia = new Map(); // candidate -> Set(intermediates)
+            for (const [m, w] of cur) {
+              if (w < 1.2) continue;
+              const second = this.curated.get(m);
+              if (!second || second.size > 30) continue;
               for (const [n, w2] of second) {
-                if (n === seed || cur.has(n)) continue;
-                if (w2 >= 1.2) bump(n, rawSeed, 0.35, `near “${rawSeed}” (via ${m})`);
+                if (n === seed || cur.has(n) || w2 < 1.2) continue;
+                if (!hopVia.has(n)) hopVia.set(n, new Set());
+                hopVia.get(n).add(m);
               }
+            }
+            for (const [n, vias] of hopVia) {
+              const nMap = this.curated.get(n);
+              const anchored = vias.size >= 2 ||
+                (nMap && (nMap.has(seed) ||
+                  [...nMap.keys()].some((k) => cur.has(k) && !vias.has(k))));
+              if (anchored) bump(n, rawSeed, 0.35, `near “${rawSeed}” (via ${[...vias][0]})`);
             }
           }
         }
 
+        // WordNet + reverse dictionary: candidates only for seeds with no
+        // curated entry (they still feed the bridge neighborhood below).
         const direct = this.byWord.get(seed) ?? [];
         const directMembers = new Set();
         for (const si of direct) {
           for (const m of this.synsets[si].members) {
             if (m === seed) continue;
             directMembers.add(m);
-            if (isPrimary) bump(m, rawSeed, 0.8, `synonym of “${rawSeed}”`);
+            if (isPrimary && !curatedOnly) bump(m, rawSeed, 0.8, `synonym of “${rawSeed}”`);
           }
         }
-        // One hop out: synonyms-of-synonyms, at reduced weight.
-        for (const m of directMembers) {
-          for (const si of this.byWord.get(m) ?? []) {
-            const syn = this.synsets[si];
-            if (syn.members.length > 12) continue;
-            for (const n of syn.members) {
-              if (n !== seed && !directMembers.has(n)) {
-                if (isPrimary) bump(n, rawSeed, 0.2, `near “${rawSeed}” (via ${m})`);
+        if (!curatedOnly) {
+          // One hop out: synonyms-of-synonyms, at reduced weight.
+          for (const m of directMembers) {
+            for (const si of this.byWord.get(m) ?? []) {
+              const syn = this.synsets[si];
+              if (syn.members.length > 12) continue;
+              for (const n of syn.members) {
+                if (n !== seed && !directMembers.has(n)) {
+                  if (isPrimary) bump(n, rawSeed, 0.2, `near “${rawSeed}” (via ${m})`);
+                }
               }
             }
           }
-        }
-        // Reverse dictionary: seed appears in a definition.
-        if (isPrimary) {
-          for (const si of this.byGloss.get(seed) ?? []) {
-            for (const m of this.synsets[si].members) {
-              bump(m, rawSeed, 0.45, `defined with “${rawSeed}”`);
+          // Reverse dictionary: seed appears in a definition.
+          if (isPrimary) {
+            for (const si of this.byGloss.get(seed) ?? []) {
+              for (const m of this.synsets[si].members) {
+                bump(m, rawSeed, 0.45, `defined with “${rawSeed}”`);
+              }
             }
           }
         }

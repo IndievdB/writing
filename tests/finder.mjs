@@ -104,6 +104,9 @@ if (curated) {
     words(faster).slice(0, 8).join(','));
   check('faster → periphrastic "more rapidly"', words(faster).some((w) => w.startsWith('more ')));
   check('faster: no bare verbs like accelerate', !words(faster).includes('accelerate') && !words(faster).includes('speed'));
+  const fast = finder.search({ seeds: ['fast'] });
+  check('fast: no gloss junk (destroyer/black/thunder)', !['destroyer', 'black', 'thunder', 'relax', 'trap'].some((w) => words(fast).includes(w)),
+    words(fast).slice(0, 10).join(','));
   const quickly = finder.search({ seeds: ['quickly'] });
   check('quickly → swiftly/rapidly, no fabricated fastly', words(quickly).slice(0, 10).includes('swiftly') && !words(quickly).includes('fastly'),
     words(quickly).slice(0, 8).join(','));

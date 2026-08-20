@@ -115,9 +115,10 @@ function restoreHash() {
 
 function runFinder() {
   if (!lexicon.ready) return;
+  // Single-word searches: one seed word only.
   const seeds = els.seedInput.value.toLowerCase()
     .split(/[\s,;]+/).map((s) => s.replace(/[^a-z'\-]/g, '')).filter(Boolean)
-    .slice(0, 5);
+    .slice(0, 1);
   const constraints = {};
   for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el.value;
   const empty = !seeds.length && Object.values(constraints).every((v) => !v || !v.trim());
