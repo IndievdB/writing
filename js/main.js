@@ -2,15 +2,13 @@
 import { Lexicon } from './lexicon.js';
 import { analyzeText } from './analyze.js';
 import { Finder } from './finder.js';
-import { renderResults, renderInspector, renderFinderResults, markSpeakingWord } from './ui.js';
+import { renderResults, renderFinderResults } from './ui.js';
 import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES } from './speech.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
   input: $('text-input'), status: $('status'), results: $('results'),
   rhythmStrip: $('rhythm-strip'),
-  annotated: $('annotated'),
-  inspector: $('word-inspector'),
   seedInput: $('seed-input'), finderStatus: $('finder-status'),
   finderResults: $('finder-results'), finderClear: $('finder-clear'),
   seedDef: $('seed-def'), slWord: $('c-slword'), slPos: $('c-slpos'),
@@ -62,7 +60,6 @@ function run() {
   lastResult = analyzeText(text, lexicon);
   renderResults(lastResult, els);
   els.results.hidden = false;
-  els.inspector.hidden = true;
   saveHash();
 }
 
@@ -234,25 +231,6 @@ els.finderClear?.addEventListener('click', () => {
   runFinder();
 });
 
-// Word inspector.
-els.annotated?.addEventListener('click', (e) => {
-  const tok = e.target.closest('.tok.word');
-  if (!tok || !lastResult) return;
-  const s = lastResult.sentences[Number(tok.dataset.si)];
-  const a = s?.ann[Number(tok.dataset.wi)];
-  if (a) renderInspector(a, els.inspector);
-});
-
-// "Find alternatives" from the inspector: seed the finder with that word.
-els.inspector?.addEventListener('click', (e) => {
-  const btn = e.target.closest('[data-find-word]');
-  if (!btn) return;
-  els.seedInput.value = btn.dataset.findWord;
-  runFinder();
-  els.seedInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  els.seedInput.focus();
-});
-
 // ---------------------------------------------------------------------------
 // Read aloud: system voices instantly; optional neural voice (Kokoro-82M via
 // ONNX/WASM) downloaded once and cached by the browser for offline use.
@@ -325,7 +303,6 @@ function stopSpeaking() {
   stopSystem();
   neuralTTS.stop();
   speaking = false;
-  markSpeakingWord(els.annotated, null);
 }
 
 async function speakText(text) {
@@ -333,8 +310,7 @@ async function speakText(text) {
   stopSpeaking();
   const rate = Number(sp.rate.value) || 1;
   const choice = sp.voice.value;
-  const isMainText = text === els.input.value;
-  const done = () => { speaking = false; markSpeakingWord(els.annotated, null); };
+  const done = () => { speaking = false; };
   speaking = true;
   if (choice.startsWith('neu:')) {
     try {
@@ -346,19 +322,13 @@ async function speakText(text) {
       done();
     }
   } else {
-    speakSystem(text, { voiceURI: choice.slice(4) || null, rate },
-      isMainText ? (start, len) => markSpeakingWord(els.annotated, start, start + (len || 1)) : null,
-      done);
+    speakSystem(text, { voiceURI: choice.slice(4) || null, rate }, null, done);
   }
 }
 
 sp.speak?.addEventListener('click', () => speakText(els.input.value));
 sp.stop?.addEventListener('click', stopSpeaking);
 sp.voice?.addEventListener('change', () => localStorage.setItem('cadence-voice', sp.voice.value));
-els.inspector?.addEventListener('click', (e) => {
-  const b = e.target.closest('.wi-speak');
-  if (b) speakText(b.dataset.word);
-});
 
 populateVoices();
 if (localStorage.getItem('cadence-neural') === '1') loadNeural();
