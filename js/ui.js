@@ -172,6 +172,7 @@ export function renderFinderResults(results, el, statusEl, onInsert, query) {
     const chip = document.createElement('button');
     chip.type = 'button';
     chip.className = 'word-chip';
+    chip.dataset.word = r.word;
     const stress = (r.info.phon.dictStresses ?? r.info.phon.stresses)
       .map((s) => (s >= 1 ? '´' : '˘')).join('');
     chip.innerHTML = `<span class="chip-word">${esc(r.word)}</span><span class="chip-meta">${stress}</span>`;

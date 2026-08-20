@@ -2,16 +2,9 @@
 // dictionary over glosses) and by sound (alliteration, assonance, consonance,
 // rhyme, stress pattern, syllables, texture, origin, concreteness, rarity).
 import { analyzeWord } from './phonology.js';
+import { VOWELS } from './lexicon.js';
 import { classifyOrigin } from './etymology.js';
 import { FUNCTION_WORDS, IRREGULAR_PAST } from './wordlists.js';
-
-// Spelling -> ARPAbet for onset/consonance inputs typed as letters.
-const DIGRAPHS = { ch: 'CH', sh: 'SH', th: 'TH', ph: 'F', wh: 'W', ng: 'NG', qu: 'K W' };
-const LETTER_PHONE = {
-  b: 'B', c: 'K', d: 'D', f: 'F', g: 'G', h: 'HH', j: 'JH', k: 'K', l: 'L',
-  m: 'M', n: 'N', p: 'P', q: 'K', r: 'R', s: 'S', t: 'T', v: 'V', w: 'W',
-  x: 'K S', y: 'Y', z: 'Z',
-};
 
 const GLOSS_STOP = new Set(`
 a an the of to in for on with or and by from as at that which who whom whose
@@ -19,20 +12,6 @@ be is are was been being have has had do does did not no it its this these
 those there here such more most other another some any each often usually
 someone something used use especially degree quality state act manner
 `.trim().split(/\s+/));
-
-function lettersToPhones(input) {
-  const s = input.toLowerCase().replace(/[^a-z]/g, '');
-  const phones = [];
-  let i = 0;
-  while (i < s.length) {
-    const two = s.slice(i, i + 2);
-    if (DIGRAPHS[two]) { phones.push(...DIGRAPHS[two].split(' ')); i += 2; continue; }
-    const p = LETTER_PHONE[s[i]];
-    if (p) phones.push(...p.split(' '));
-    i++;
-  }
-  return phones;
-}
 
 // Derivational suffixes: seed + one of these = same lemma family, useless as
 // a "synonym" ("walk" -> walking, walker, walkway).
@@ -141,6 +120,29 @@ export class Finder {
       s.glossSet = new Set(s.gloss ? s.gloss.split(' ').filter((t) => t.length >= 3 && !GLOSS_STOP.has(t)) : []);
     }
     return s.glossSet;
+  }
+
+  // WordNet definitions for a word (or its lemma), up to `limit` senses.
+  // Returns [{pos, gloss}] — pos is N/V/J/R or ''.
+  definitionsFor(word, limit = 4) {
+    const w = word.toLowerCase().replace(/[^a-z'\-]/g, '');
+    if (!w) return [];
+    const candidates = [...new Set(stem(w))];
+    const d = this.detectInflection(w);
+    if (d) candidates.push(d.lemma);
+    for (const c of candidates) {
+      const out = [];
+      const seen = new Set();
+      for (const si of this.byWord.get(c) ?? []) {
+        const syn = this.synsets[si];
+        if (!syn.gloss || seen.has(syn.gloss)) continue;
+        seen.add(syn.gloss);
+        out.push({ pos: syn.pos, gloss: syn.gloss, of: c === w ? null : c });
+        if (out.length >= limit) break;
+      }
+      if (out.length) return out;
+    }
+    return [];
   }
 
   phon(word) {
@@ -430,22 +432,61 @@ export class Finder {
     const tests = [];
     const soft = [];
 
-    if (c.allit?.trim()) {
-      const target = this.onsetOf(c.allit.trim());
-      if (target?.length) {
-        tests.push((p) => {
-          const on = p.onset ?? [];
-          return target.every((ph, i) => on[i] === ph);
-        });
+    // "Sounds like": one target word; optionally a chosen subset of its
+    // sounds; optionally a position (start / anywhere / end). This subsumes
+    // alliteration (initial consonant + start), assonance (a vowel), and
+    // consonance (a consonant, anywhere).
+    if (c.sl?.word?.trim()) {
+      const target = this.phon(c.sl.word.trim().toLowerCase());
+      if (target && target.phones?.length) {
+        const pos = c.sl.pos || 'any';
+        // Region of the candidate the sounds must fall in: the start region
+        // runs through the first vowel, the end region from the last vowel.
+        const region = (p) => {
+          const ph = p.phones ?? [];
+          if (!ph.length) return ph;
+          if (pos === 'start') {
+            const i = ph.findIndex((x) => VOWELS.has(x));
+            return ph.slice(0, (i < 0 ? ph.length - 1 : i) + 1);
+          }
+          if (pos === 'end') {
+            let i = -1;
+            for (let k = ph.length - 1; k >= 0; k--) if (VOWELS.has(ph[k])) { i = k; break; }
+            return ph.slice(i < 0 ? 0 : i);
+          }
+          return ph;
+        };
+        const selected = (c.sl.selected ?? []).filter((s) => target.phones.includes(s));
+        if (selected.length) {
+          // Explicit sounds: every chosen sound must appear in the region.
+          tests.push((p, word) => {
+            if (word === c.sl.word) return false;
+            const r = region(p);
+            return selected.every((s) => r.includes(s));
+          });
+        } else {
+          // Loose mode: share enough distinct sounds with the target.
+          const distinct = [...new Set(target.phones)];
+          const need = Math.min(2, distinct.length);
+          tests.push((p, word) => {
+            if (word === c.sl.word) return false;
+            const r = region(p);
+            let n = 0;
+            for (const s of distinct) if (r.includes(s)) n++;
+            return n >= need;
+          });
+          soft.push((p) => {
+            const r = new Set(region(p));
+            let n = 0;
+            for (const s of distinct) if (r.has(s)) n++;
+            return (n / distinct.length) * 0.8;
+          });
+        }
+        // Both modes: sharing the target's stressed vowel or opening sound
+        // ranks higher — that's what the ear notices first.
+        soft.push((p) => (target.stressedVowel && p.stressedVowel === target.stressedVowel ? 0.5 : 0) +
+          (p.phones?.[0] === target.phones[0] ? 0.4 : 0));
       }
-    }
-    if (c.asson?.trim()) {
-      const v = this.stressedVowelOf(c.asson.trim());
-      if (v) tests.push((p) => p.stressedVowel === v);
-    }
-    if (c.conson?.trim()) {
-      const phones = lettersToPhones(c.conson);
-      if (phones.length) tests.push((p) => phones.every((ph) => p.phones.includes(ph)));
     }
     if (c.rhyme?.trim()) {
       const rp = this.phon(c.rhyme.trim().toLowerCase());
@@ -493,21 +534,6 @@ export class Finder {
     return { tests, soft };
   }
 
-  onsetOf(input) {
-    const w = input.toLowerCase();
-    if (/^[a-z]{1,4}$/.test(w) && !this.lex.phones.has(w)) return lettersToPhones(w);
-    const p = this.phon(w);
-    if (p?.onset?.length) return [p.onset[0]];
-    if (/^[a-z]+$/.test(w)) return lettersToPhones(w[0]);
-    return null;
-  }
-
-  stressedVowelOf(input) {
-    const up = input.toUpperCase().trim();
-    if (/^(AA|AE|AH|AO|AW|AY|EH|ER|EY|IH|IY|OW|OY|UH|UW)$/.test(up)) return up;
-    return this.phon(input.toLowerCase())?.stressedVowel ?? null;
-  }
-
   // ---- main entry ----------------------------------------------------------
 
   search({ seeds = [], constraints = {}, limit = 120 }) {
@@ -528,6 +554,9 @@ export class Finder {
     const results = [];
 
     const consider = (word, base) => {
+      // Word-type filter: the candidate lemma must be able to serve as that
+      // part of speech (curated POS lines + the Brill lexicon).
+      if (constraints.type && !this.posCap(word).includes(constraints.type)) return;
       const surfaces = kind ? this.inflectFor(word, kind) : [word];
       if (!surfaces) return; // wrong part of speech for the seed's inflection
       for (const surface of surfaces) {

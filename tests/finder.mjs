@@ -32,10 +32,29 @@ const walk = finder.search({ seeds: ['walk', 'slowly'] });
 check('"walk slowly" → saunter/amble/stroll', ['saunter', 'amble', 'stroll'].some((w) => words(walk).slice(0, 15).includes(w)),
   words(walk).slice(0, 10).join(','));
 
-// Alliteration constraint: synonyms of happy starting with J sound.
-const happyJ = finder.search({ seeds: ['happy'], constraints: { allit: 'j' } });
-check('happy + allit j → jovial/joyful/jolly', words(happyJ).some((w) => /^j/.test(w)), words(happyJ).slice(0, 6).join(','));
-check('happy + allit j: all start with J sound', happyJ.every((r) => r.info.phon.onset[0] === 'JH'));
+// Sounds-like with a selected initial consonant at the start = alliteration.
+const happyJ = finder.search({ seeds: ['happy'], constraints: { sl: { word: 'jolly', selected: ['JH'], pos: 'start' } } });
+check('happy + JH at start → jovial/joyful', words(happyJ).some((w) => /^j/.test(w)), words(happyJ).slice(0, 6).join(','));
+check('happy + JH at start: all start with J sound', happyJ.every((r) => r.info.phon.phones[0] === 'JH'));
+
+// Sounds-like with a selected vowel anywhere = assonance.
+const asson2 = finder.search({ seeds: ['bright'], constraints: { sl: { word: 'time', selected: ['AY'], pos: 'any' } } });
+check('bright + AY anywhere: all contain AY', asson2.length > 0 && asson2.every((r) => r.info.phon.phones.includes('AY')),
+  words(asson2).slice(0, 6).join(','));
+
+// Sounds-like loose mode: no sounds selected, share ≥2 sounds.
+const loose = finder.search({ seeds: ['shine'], constraints: { sl: { word: 'silver', selected: [], pos: 'any' } } });
+check('shine + sounds-like silver (loose)', loose.length > 0 && loose.every((r) => {
+  const set = new Set(r.info.phon.phones);
+  return ['S', 'IH', 'L', 'V', 'ER'].filter((x) => set.has(x)).length >= 2;
+}), words(loose).slice(0, 6).join(','));
+
+// Sounds-like at the end.
+const endM = finder.search({ constraints: { sl: { word: 'moon', selected: ['N'], pos: 'end' }, syll: '1' } });
+check('N at end, 1 syllable: all end-region has N', endM.length > 0 && endM.every((r) => {
+  const ph = r.info.phon.phones;
+  return ph.slice(-3).includes('N');
+}), words(endM).slice(0, 6).join(','));
 
 // Stress pattern: two syllables, unstressed-stressed (iamb).
 const sadIamb = finder.search({ seeds: ['sad'], constraints: { stress: '01' } });
@@ -54,14 +73,12 @@ check('rhyme results actually rhyme', rhyme.every((r) => r.info.phon.rhymeKey ==
 const soft2 = finder.search({ constraints: { syll: '2', texture: 'soft' } });
 check('seedless 2-syll soft words', soft2.length >= 10 && soft2.every((r) => r.info.phon.syllableCount === 2));
 
-// Assonance from a word.
-const asson = finder.search({ seeds: ['bright'], constraints: { asson: 'time' } });
-check('bright + assonance(time) share AY', asson.every((r) => r.info.phon.stressedVowel === 'AY'),
-  words(asson).slice(0, 6).join(','));
-
-// Consonance letters.
-const consn = finder.search({ seeds: ['dark'], constraints: { conson: 'm' } });
-check('dark + contains M', consn.every((r) => r.info.phon.phones.includes('M')), words(consn).slice(0, 6).join(','));
+// Word-type filter.
+const bigNouns = finder.search({ seeds: ['big'], constraints: { type: 'N' } });
+check('big + nouns only: all noun-capable', bigNouns.length === 0 || bigNouns.every((r) => finder.posCap(r.word.split(' ').pop()).includes('N')));
+const sadJ = finder.search({ seeds: ['sad'], constraints: { type: 'J' } });
+check('sad + adjectives: gloomy/mournful present', ['gloomy', 'mournful', 'unhappy'].some((w) => words(sadJ).includes(w)),
+  words(sadJ).slice(0, 6).join(','));
 
 // Origin + rarity filters.
 const germBig = finder.search({ seeds: ['big'], constraints: { origin: 'germanic' } });

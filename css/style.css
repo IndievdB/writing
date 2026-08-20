@@ -285,6 +285,56 @@ td.num { font-variant-numeric: tabular-nums; }
 }
 .about p { color: var(--ink-2); margin: 0.3rem 0 0; font-size: 0.93rem; }
 
+/* ---------- sounds-like control ---------- */
+.seed-def {
+  margin: 0.35rem 0 0; font-size: 0.88rem; color: var(--ink-2);
+  border-left: 3px solid var(--accent-mid); padding-left: 0.6rem;
+}
+.seed-def i { color: var(--muted); }
+.def-of { color: var(--muted); }
+.soundslike-row {
+  display: flex; align-items: flex-end; gap: 0.8rem; flex-wrap: wrap;
+  margin-top: 0.7rem;
+}
+.sl-word-label, .sl-pos-label {
+  display: flex; flex-direction: column; gap: 0.25rem;
+  font-size: 0.82rem; color: var(--ink-2);
+}
+.sl-word-label input, .sl-pos-label select {
+  border: 1px solid var(--hairline); border-radius: 8px; font: inherit;
+  font-size: 0.92rem; padding: 0.35rem 0.55rem; background: var(--page);
+  color: var(--ink); min-width: 13rem;
+}
+.sl-pos-label select { min-width: auto; }
+.sl-phones {
+  display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap;
+  padding-bottom: 0.15rem;
+}
+.sl-hint { font-size: 0.78rem; color: var(--muted); margin-right: 0.2rem; }
+.sl-chip {
+  border: 1px solid var(--hairline); border-radius: 8px; background: var(--page);
+  color: var(--ink); font-size: 0.9rem; font-family: ui-monospace, monospace;
+  padding: 0.18rem 0.5rem; cursor: pointer;
+}
+.sl-chip.sl-vowel { border-bottom: 3px solid var(--orange); }
+.sl-chip.sl-conson { border-bottom: 3px solid var(--accent-mid); }
+.sl-chip.on {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+.sl-chip:hover { border-color: var(--accent); }
+
+/* ---------- definition popup ---------- */
+.def-popup {
+  position: absolute; z-index: 30;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18);
+  padding: 0.55rem 0.75rem; font-size: 0.88rem; color: var(--ink-2);
+  line-height: 1.45;
+}
+.def-popup b { color: var(--ink); }
+.def-popup i { color: var(--muted); }
+.def-popup[hidden] { display: none; }
+
 /* ---------- word finder ---------- */
 .finder-panel input[type="text"], .finder-panel input:not([type]) {
   width: 100%; border: 1px solid var(--hairline); border-radius: 8px;

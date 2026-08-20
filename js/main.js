@@ -13,12 +13,13 @@ const els = {
   inspector: $('word-inspector'),
   seedInput: $('seed-input'), finderStatus: $('finder-status'),
   finderResults: $('finder-results'), finderClear: $('finder-clear'),
+  seedDef: $('seed-def'), slWord: $('c-slword'), slPos: $('c-slpos'),
+  slPhones: $('sl-phones'), defPopup: $('def-popup'),
 };
 const constraintEls = {
-  allit: $('c-allit'), asson: $('c-asson'), conson: $('c-conson'),
   rhyme: $('c-rhyme'), syll: $('c-syll'), stress: $('c-stress'),
-  texture: $('c-texture'), origin: $('c-origin'), feel: $('c-feel'),
-  rarity: $('c-rarity'),
+  type: $('c-type'), texture: $('c-texture'), origin: $('c-origin'),
+  feel: $('c-feel'), rarity: $('c-rarity'),
 };
 
 const lexicon = new Lexicon();
@@ -47,6 +48,7 @@ async function loadData() {
     } catch { /* absent locally is fine; WordNet still works */ }
     els.status.textContent = `ready — ${lexicon.phones.size.toLocaleString()} words, ${finder.curated.size.toLocaleString()} curated entries, ${finder.synsets.length.toLocaleString()} synonym groups`;
     run();
+    rebuildSlChips();
     runFinder();
   } catch (e) {
     els.status.textContent = `could not load dictionaries (${e.message}). If you opened index.html directly, serve the folder instead: python3 -m http.server`;
@@ -78,6 +80,54 @@ function restoreHash() {
 
 // ---- word finder ----
 
+// Friendly labels for ARPAbet phonemes on the sound chips.
+const PHONE_LABELS = {
+  AA: 'ah', AE: 'a', AH: 'uh', AO: 'aw', AW: 'ow', AY: 'eye', EH: 'eh',
+  ER: 'er', EY: 'ay', IH: 'ih', IY: 'ee', OW: 'oh', OY: 'oy', UH: 'uu',
+  UW: 'oo', B: 'b', CH: 'ch', D: 'd', DH: 'th', F: 'f', G: 'g', HH: 'h',
+  JH: 'j', K: 'k', L: 'l', M: 'm', N: 'n', NG: 'ng', P: 'p', R: 'r',
+  S: 's', SH: 'sh', T: 't', TH: 'th', V: 'v', W: 'w', Y: 'y', Z: 'z', ZH: 'zh',
+};
+const SL_VOWELS = new Set(['AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH', 'ER', 'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW']);
+
+let slSelected = new Set(); // indices into the sounds-like word's phone list
+let slPhoneList = [];
+
+// Rebuild the phoneme chips when the sounds-like word changes.
+function rebuildSlChips() {
+  const w = els.slWord.value.trim().toLowerCase().replace(/[^a-z'\-]/g, '');
+  els.slPhones.innerHTML = '';
+  slSelected = new Set();
+  slPhoneList = [];
+  if (!w || !lexicon.ready) return;
+  const p = finder.phon(w);
+  if (!p?.phones?.length) {
+    els.slPhones.innerHTML = '<span class="sl-hint">word not in the pronouncing dictionary</span>';
+    return;
+  }
+  slPhoneList = p.phones;
+  const hint = document.createElement('span');
+  hint.className = 'sl-hint';
+  hint.textContent = 'match these sounds (tap to pick specific ones):';
+  els.slPhones.appendChild(hint);
+  p.phones.forEach((ph, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `sl-chip ${SL_VOWELS.has(ph) ? 'sl-vowel' : 'sl-conson'}`;
+    b.textContent = PHONE_LABELS[ph] ?? ph.toLowerCase();
+    b.title = `${ph}${SL_VOWELS.has(ph) ? ' (vowel)' : ' (consonant)'}`;
+    b.setAttribute('aria-pressed', 'false');
+    b.addEventListener('click', () => {
+      if (slSelected.has(i)) slSelected.delete(i);
+      else slSelected.add(i);
+      b.classList.toggle('on', slSelected.has(i));
+      b.setAttribute('aria-pressed', String(slSelected.has(i)));
+      queueFinder();
+    });
+    els.slPhones.appendChild(b);
+  });
+}
+
 function runFinder() {
   if (!lexicon.ready) return;
   // Single-word searches: one seed word only.
@@ -86,13 +136,69 @@ function runFinder() {
     .slice(0, 1);
   const constraints = {};
   for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el.value;
-  const empty = !seeds.length && Object.values(constraints).every((v) => !v || !v.trim());
+  const slWord = els.slWord.value.trim().toLowerCase().replace(/[^a-z'\-]/g, '');
+  if (slWord) {
+    constraints.sl = {
+      word: slWord,
+      selected: [...slSelected].map((i) => slPhoneList[i]).filter(Boolean),
+      pos: els.slPos.value,
+    };
+  }
+  const empty = !seeds.length && !slWord &&
+    Object.values(constraints).every((v) => typeof v !== 'string' || !v.trim());
   const results = empty ? [] : finder.search({ seeds, constraints });
   renderFinderResults(results, els.finderResults, els.finderStatus, insertWord, { empty });
+
+  // Definition of the seed word, inline under the input.
+  const defs = seeds.length ? finder.definitionsFor(seeds[0]) : [];
+  els.seedDef.hidden = !defs.length;
+  els.seedDef.innerHTML = defs.map((d) => defLine(d)).join('<br>');
 }
+
+const POS_FULL = { N: 'noun', V: 'verb', J: 'adj.', R: 'adv.', '': '' };
+const escText = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function defLine(d) {
+  const tag = d.pos ? `<i>${POS_FULL[d.pos] ?? ''}</i> ` : '';
+  const of = d.of ? ` <span class="def-of">(${escText(d.of)})</span>` : '';
+  return `${tag}${escText(d.gloss)}${of}`;
+}
+
+// Definition popup on hover/click of a result chip.
+let popupTimer = null;
+function showPopup(chip) {
+  const word = chip.dataset.word;
+  if (!word) return;
+  const defs = finder.definitionsFor(word.split(' ').pop());
+  els.defPopup.innerHTML = `<b>${escText(word)}</b>` +
+    (defs.length ? '<br>' + defs.map((d) => defLine(d)).join('<br>')
+      : '<br><span class="def-of">no definition found</span>');
+  els.defPopup.hidden = false;
+  const r = chip.getBoundingClientRect();
+  const pw = Math.min(360, window.innerWidth - 24);
+  els.defPopup.style.maxWidth = pw + 'px';
+  let x = r.left + window.scrollX;
+  if (x + pw > window.scrollX + window.innerWidth - 12) x = window.scrollX + window.innerWidth - pw - 12;
+  els.defPopup.style.left = x + 'px';
+  els.defPopup.style.top = (r.bottom + window.scrollY + 6) + 'px';
+}
+function hidePopup() {
+  clearTimeout(popupTimer);
+  els.defPopup.hidden = true;
+}
+els.finderResults.addEventListener('mouseover', (e) => {
+  const chip = e.target.closest('.word-chip');
+  if (!chip) return;
+  clearTimeout(popupTimer);
+  popupTimer = setTimeout(() => showPopup(chip), 220);
+});
+els.finderResults.addEventListener('mouseout', (e) => {
+  if (e.target.closest('.word-chip')) hidePopup();
+});
+window.addEventListener('scroll', hidePopup, { passive: true });
 
 // Insert a found word into the sentence at the cursor, with sane spacing.
 function insertWord(word) {
+  hidePopup();
   const ta = els.input;
   const pos = ta.selectionStart ?? ta.value.length;
   const before = ta.value.slice(0, pos);
@@ -113,12 +219,17 @@ els.input.addEventListener('input', queueRun);
 let finderTimer = null;
 const queueFinder = () => { clearTimeout(finderTimer); finderTimer = setTimeout(runFinder, 250); };
 els.seedInput.addEventListener('input', queueFinder);
+els.slWord.addEventListener('input', () => { rebuildSlChips(); queueFinder(); });
+els.slPos.addEventListener('change', queueFinder);
 for (const el of Object.values(constraintEls)) {
   el.addEventListener('input', queueFinder);
   el.addEventListener('change', queueFinder);
 }
 els.finderClear.addEventListener('click', () => {
   els.seedInput.value = '';
+  els.slWord.value = '';
+  els.slPos.value = 'any';
+  rebuildSlChips();
   for (const el of Object.values(constraintEls)) el.value = '';
   runFinder();
 });
