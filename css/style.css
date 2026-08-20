@@ -103,6 +103,23 @@ textarea {
   min-height: 5.5rem;
 }
 textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.speech-row {
+  display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;
+  margin-top: 0.55rem;
+}
+.speech-row button, .speech-row select {
+  background: none; border: 1px solid var(--hairline); border-radius: 8px;
+  color: var(--ink-2); font-size: 0.85rem; padding: 0.22rem 0.6rem; cursor: pointer;
+  font-family: inherit;
+}
+.speech-row select { background: var(--surface); color: var(--ink); max-width: 15rem; }
+.speech-row button:hover { border-color: var(--accent); color: var(--accent); }
+.speech-row button:disabled { opacity: 0.45; cursor: default; }
+#neural-load.hidden { display: none; }
+.tok.speaking {
+  background: color-mix(in srgb, var(--accent) 26%, transparent);
+  border-radius: 4px;
+}
 .input-row {
   display: flex; justify-content: space-between; align-items: center;
   gap: 1rem; margin-top: 0.55rem; flex-wrap: wrap;
@@ -305,12 +322,12 @@ td.num { font-variant-numeric: tabular-nums; }
 .word-chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--page)); }
 .chip-word { font-size: 0.98rem; }
 .chip-meta { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
-.wi-find {
+.wi-find, .wi-speak {
   margin-left: 0.7rem; background: none; border: 1px solid var(--hairline);
   border-radius: 999px; color: var(--accent); font-size: 0.78rem;
   padding: 0.08rem 0.6rem; cursor: pointer; vertical-align: middle;
 }
-.wi-find:hover { border-color: var(--accent); }
+.wi-find:hover, .wi-speak:hover { border-color: var(--accent); }
 
 /* ---------- compare mode ---------- */
 .revision-label {

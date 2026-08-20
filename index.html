@@ -26,6 +26,20 @@
       <textarea id="revision-input" rows="4" spellcheck="true"
         placeholder="Your rewrite of the text above…"></textarea>
     </div>
+    <div class="speech-row" role="group" aria-label="Read aloud">
+      <button type="button" id="speak-btn" title="Read the sentence aloud">▶ Read aloud</button>
+      <button type="button" id="stop-speak" title="Stop">■</button>
+      <label class="visually-hidden" for="voice-select">Voice</label>
+      <select id="voice-select"></select>
+      <label class="visually-hidden" for="rate-select">Speed</label>
+      <select id="rate-select">
+        <option value="0.8">slow</option>
+        <option value="1" selected>normal</option>
+        <option value="1.2">fast</option>
+      </select>
+      <button type="button" id="neural-load" title="Download a neural voice that runs in your browser and is cached for offline use">get neural voice (~90 MB, cached)</button>
+      <span id="speech-status" class="status" role="status"></span>
+    </div>
     <div class="input-row">
       <div class="examples" role="group" aria-label="Example texts">
         <span class="examples-label">Try:</span>

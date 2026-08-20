@@ -237,6 +237,22 @@ function flashSpans(spans, annotated) {
   }, 2400);
 }
 
+// Live word highlight while the system voice speaks (boundary events give
+// character offsets into the same text the annotated view renders).
+export function markSpeakingWord(annotated, start, end) {
+  annotated.querySelectorAll('.tok.speaking').forEach((el) => el.classList.remove('speaking'));
+  if (start == null) return;
+  let cursor = 0;
+  for (const node of annotated.childNodes) {
+    const len = node.textContent.length;
+    if (node.nodeType === 1 && node.classList.contains('tok')) {
+      const s = cursor, e = cursor + len;
+      if (s < end && e > start) { node.classList.add('speaking'); return; }
+    }
+    cursor += len;
+  }
+}
+
 function highlightByOffsets(annotated, spans) {
   let cursor = 0;
   annotated.childNodes.forEach((node) => {
@@ -299,6 +315,7 @@ export function renderInspector(a, el) {
   if (a.ety.swap) items.push(['plainer', `“${a.ety.swap}”`]);
   if (a.phon.oov) items.push(['note', 'not in the pronouncing dictionary — estimated']);
   el.innerHTML = `<div class="wi-head">${esc(a.token.value)}` +
+    `<button type="button" class="wi-speak" data-word="${esc(a.token.value)}" title="Say this word">🔊</button>` +
     `<button type="button" class="wi-find" data-find-word="${esc(a.lower)}">find alternatives ↓</button></div>` +
     items.map(([k, v]) => `<span class="wi-item">${k}: <b>${esc(v)}</b></span>`).join('');
   el.hidden = false;

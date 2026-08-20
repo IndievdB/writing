@@ -2,7 +2,8 @@
 import { Lexicon } from './lexicon.js';
 import { analyzeText } from './analyze.js';
 import { Finder } from './finder.js';
-import { renderResults, renderInspector, renderCompare, renderFinderResults, LENS_LEGENDS } from './ui.js';
+import { renderResults, renderInspector, renderCompare, renderFinderResults, markSpeakingWord, LENS_LEGENDS } from './ui.js';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES } from './speech.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -207,6 +208,119 @@ els.inspector.addEventListener('click', (e) => {
   els.seedInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
   els.seedInput.focus();
 });
+
+// ---------------------------------------------------------------------------
+// Read aloud: system voices instantly; optional neural voice (Kokoro-82M via
+// ONNX/WASM) downloaded once and cached by the browser for offline use.
+
+const sp = {
+  speak: $('speak-btn'), stop: $('stop-speak'), voice: $('voice-select'),
+  rate: $('rate-select'), neural: $('neural-load'), status: $('speech-status'),
+};
+const neuralTTS = new NeuralTTS();
+let speaking = false;
+let lastTextEl = els.input;
+[els.input, els.revisionInput].forEach((t) => t.addEventListener('focus', () => { lastTextEl = t; }));
+
+function speechStatus(msg) { sp.status.textContent = msg ?? ''; }
+
+async function populateVoices() {
+  const saved = localStorage.getItem('cadence-voice') ?? '';
+  sp.voice.innerHTML = '';
+  if (systemAvailable()) {
+    const voices = await listSystemVoices();
+    const en = voices.filter((v) => v.lang?.toLowerCase().startsWith('en'));
+    const list = en.length ? en : voices;
+    if (list.length) {
+      const og = document.createElement('optgroup');
+      og.label = 'System voices';
+      for (const v of list.slice(0, 30)) {
+        const o = document.createElement('option');
+        o.value = `sys:${v.voiceURI}`;
+        o.textContent = v.name;
+        og.appendChild(o);
+      }
+      sp.voice.appendChild(og);
+    }
+  }
+  if (neuralTTS.state === 'ready') {
+    const og = document.createElement('optgroup');
+    og.label = 'Neural (offline, cached)';
+    for (const [id, label] of NEURAL_VOICES) {
+      const o = document.createElement('option');
+      o.value = `neu:${id}`;
+      o.textContent = label;
+      og.appendChild(o);
+    }
+    sp.voice.appendChild(og);
+  }
+  if (!sp.voice.options.length) {
+    const o = document.createElement('option');
+    o.value = ''; o.textContent = 'no voices available';
+    sp.voice.appendChild(o);
+  }
+  if (saved && [...sp.voice.options].some((o) => o.value === saved)) sp.voice.value = saved;
+  else if (neuralTTS.state === 'ready') sp.voice.value = `neu:${NEURAL_VOICES[0][0]}`;
+}
+
+async function loadNeural() {
+  sp.neural.disabled = true;
+  try {
+    await neuralTTS.load(speechStatus);
+    localStorage.setItem('cadence-neural', '1');
+    sp.neural.classList.add('hidden');
+    await populateVoices();
+    speechStatus('neural voice ready — cached for offline use');
+    setTimeout(() => speechStatus(''), 4000);
+  } catch (e) {
+    speechStatus(`neural voice failed to load (${e?.message ?? e}) — system voices still work`);
+    sp.neural.disabled = false;
+  }
+}
+sp.neural.addEventListener('click', loadNeural);
+
+function stopSpeaking() {
+  stopSystem();
+  neuralTTS.stop();
+  speaking = false;
+  markSpeakingWord(els.annotated, null);
+}
+
+async function speakText(text) {
+  if (!text.trim()) return;
+  stopSpeaking();
+  const rate = Number(sp.rate.value) || 1;
+  const choice = sp.voice.value;
+  const isMainText = text === els.input.value;
+  const done = () => { speaking = false; markSpeakingWord(els.annotated, null); };
+  speaking = true;
+  if (choice.startsWith('neu:')) {
+    try {
+      speechStatus('synthesizing…');
+      await neuralTTS.speak(text, choice.slice(4), done);
+      speechStatus('');
+    } catch (e) {
+      speechStatus(`synthesis failed (${e?.message ?? e})`);
+      done();
+    }
+  } else {
+    speakSystem(text, { voiceURI: choice.slice(4) || null, rate },
+      isMainText ? (start, len) => markSpeakingWord(els.annotated, start, start + (len || 1)) : null,
+      done);
+  }
+}
+
+sp.speak.addEventListener('click', () => speakText(lastTextEl.value.trim() ? lastTextEl.value : els.input.value));
+sp.stop.addEventListener('click', stopSpeaking);
+sp.voice.addEventListener('change', () => localStorage.setItem('cadence-voice', sp.voice.value));
+els.inspector.addEventListener('click', (e) => {
+  const b = e.target.closest('.wi-speak');
+  if (b) speakText(b.dataset.word);
+});
+
+populateVoices();
+if (localStorage.getItem('cadence-neural') === '1') loadNeural();
+else if (!systemAvailable()) speechStatus('no system voices in this browser — load the neural voice to read aloud');
 
 // Theme toggle: auto -> explicit dark -> explicit light.
 const root = document.documentElement;
