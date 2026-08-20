@@ -11,11 +11,13 @@ const els = {
   rhythmStrip: $('rhythm-strip'),
   seedInput: $('seed-input'), finderStatus: $('finder-status'),
   finderResults: $('finder-results'), finderClear: $('finder-clear'),
-  seedDef: $('seed-def'), slWord: $('c-slword'), slPos: $('c-slpos'),
+  seedDef: $('seed-def'), slWord: $('c-slword'),
   slPhones: $('sl-phones'), defPopup: $('def-popup'),
+  stressChips: $('stress-chips'), stressAdd: $('stress-add'),
+  stressClear: $('stress-clear'),
 };
 const constraintEls = {
-  rhyme: $('c-rhyme'), syll: $('c-syll'), stress: $('c-stress'),
+  rhyme: $('c-rhyme'), syll: $('c-syll'),
   type: $('c-type'), texture: $('c-texture'), origin: $('c-origin'),
   feel: $('c-feel'), rarity: $('c-rarity'),
 };
@@ -87,67 +89,114 @@ const PHONE_LABELS = {
 };
 const SL_VOWELS = new Set(['AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH', 'ER', 'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW']);
 
-let slSelected = new Set(); // indices into the sounds-like word's phone list
-let slPhoneList = [];
+// Sounds-like state: one entry per typed word. Each sound chip cycles
+// off -> anywhere -> at the start -> at the end -> off; a per-word
+// "keep together" toggle requires the chosen sounds to be one consecutive run.
+let slState = []; // [{word, phones, sel: Map(idx -> 'any'|'start'|'end'), grouped}]
+const SL_CYCLE = ['', 'any', 'start', 'end'];
+const SL_BADGE = { any: '•', start: '▸', end: '◂' };
 
-// Rebuild the phoneme chips when the sounds-like word changes.
+function slWords() {
+  return els.slWord.value.toLowerCase()
+    .split(/[\s,;]+/).map((w) => w.replace(/[^a-z'\-]/g, '')).filter(Boolean)
+    .slice(0, 3);
+}
+
 function rebuildSlChips() {
-  const w = els.slWord.value.trim().toLowerCase().replace(/[^a-z'\-]/g, '');
   els.slPhones.innerHTML = '';
-  slSelected = new Set();
-  slPhoneList = [];
-  if (!w || !lexicon.ready) return;
-  const p = finder.phon(w);
-  if (!p?.phones?.length) {
-    els.slPhones.innerHTML = '<span class="sl-hint">word not in the pronouncing dictionary</span>';
-    return;
-  }
-  slPhoneList = p.phones;
-  const hint = document.createElement('span');
+  slState = [];
+  if (!lexicon.ready) return;
+  const words = slWords();
+  if (!words.length) return;
+  const hint = document.createElement('div');
   hint.className = 'sl-hint';
-  hint.textContent = 'match these sounds (tap to pick specific ones):';
+  hint.textContent = 'tap a sound: once = anywhere • twice = at the start ▸ • three times = at the end ◂';
   els.slPhones.appendChild(hint);
-  p.phones.forEach((ph, i) => {
-    const b = document.createElement('button');
-    b.type = 'button';
-    b.className = `sl-chip ${SL_VOWELS.has(ph) ? 'sl-vowel' : 'sl-conson'}`;
-    b.textContent = PHONE_LABELS[ph] ?? ph.toLowerCase();
-    b.title = `${ph}${SL_VOWELS.has(ph) ? ' (vowel)' : ' (consonant)'}`;
-    b.setAttribute('aria-pressed', 'false');
-    b.addEventListener('click', () => {
-      if (slSelected.has(i)) slSelected.delete(i);
-      else slSelected.add(i);
-      b.classList.toggle('on', slSelected.has(i));
-      b.setAttribute('aria-pressed', String(slSelected.has(i)));
+  for (const w of words) {
+    const block = document.createElement('div');
+    block.className = 'sl-block';
+    const lbl = document.createElement('span');
+    lbl.className = 'sl-wordlbl';
+    lbl.textContent = w;
+    block.appendChild(lbl);
+    const p = finder.phon(w);
+    if (!p?.phones?.length) {
+      const miss = document.createElement('span');
+      miss.className = 'sl-hint';
+      miss.textContent = 'not in the pronouncing dictionary';
+      block.appendChild(miss);
+      els.slPhones.appendChild(block);
+      continue;
+    }
+    const st = { word: w, phones: p.phones, sel: new Map(), grouped: false };
+    slState.push(st);
+    p.phones.forEach((ph, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = `sl-chip ${SL_VOWELS.has(ph) ? 'sl-vowel' : 'sl-conson'}`;
+      const base = PHONE_LABELS[ph] ?? ph.toLowerCase();
+      const paint = () => {
+        const mode = st.sel.get(i) ?? '';
+        b.textContent = mode === 'start' ? `▸${base}` : mode === 'end' ? `${base}◂` : base;
+        b.classList.toggle('on', !!mode);
+        b.setAttribute('aria-pressed', String(!!mode));
+        b.title = `${ph}${SL_VOWELS.has(ph) ? ' (vowel)' : ' (consonant)'}` +
+          (mode ? ` — must appear ${mode === 'any' ? 'anywhere' : 'at the ' + mode}` : '');
+      };
+      paint();
+      b.addEventListener('click', () => {
+        const cur = st.sel.get(i) ?? '';
+        const next = SL_CYCLE[(SL_CYCLE.indexOf(cur) + 1) % SL_CYCLE.length];
+        if (next) st.sel.set(i, next);
+        else st.sel.delete(i);
+        paint();
+        groupBtn.hidden = st.sel.size < 2;
+        if (st.sel.size < 2) { st.grouped = false; groupBtn.classList.remove('on'); }
+        queueFinder();
+      });
+      block.appendChild(b);
+    });
+    const groupBtn = document.createElement('button');
+    groupBtn.type = 'button';
+    groupBtn.className = 'sl-group';
+    groupBtn.textContent = 'keep together';
+    groupBtn.title = 'The chosen sounds must appear side by side, in this order';
+    groupBtn.hidden = true;
+    groupBtn.addEventListener('click', () => {
+      st.grouped = !st.grouped;
+      groupBtn.classList.toggle('on', st.grouped);
       queueFinder();
     });
-    els.slPhones.appendChild(b);
-  });
+    block.appendChild(groupBtn);
+    els.slPhones.appendChild(block);
+  }
 }
 
 function runFinder() {
   if (!lexicon.ready) return;
-  // Single-word searches: one seed word only.
+  // Multiple meanings are additive: synonyms of every seed, pooled.
   const seeds = els.seedInput.value.toLowerCase()
     .split(/[\s,;]+/).map((s) => s.replace(/[^a-z'\-]/g, '')).filter(Boolean)
-    .slice(0, 1);
+    .slice(0, 6);
   const constraints = {};
-  for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el.value;
-  const slWord = els.slWord.value.trim().toLowerCase().replace(/[^a-z'\-]/g, '');
-  if (slWord) {
-    constraints.sl = {
-      word: slWord,
-      selected: [...slSelected].map((i) => slPhoneList[i]).filter(Boolean),
-      pos: els.slPos.value,
-    };
-  }
-  const empty = !seeds.length && !slWord &&
+  for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el ? el.value : '';
+  constraints.stress = stressPat.join('');
+  constraints.sl = slState.map((st) => ({
+    word: st.word,
+    grouped: st.grouped,
+    sel: [...st.sel.entries()].sort((a, b) => a[0] - b[0])
+      .map(([i, pos]) => ({ ph: st.phones[i], pos })),
+  }));
+  const empty = !seeds.length && !constraints.sl.length && !stressPat.length &&
     Object.values(constraints).every((v) => typeof v !== 'string' || !v.trim());
   const results = empty ? [] : finder.search({ seeds, constraints });
   renderFinderResults(results, els.finderResults, els.finderStatus, insertWord, { empty });
 
-  // Definition of the seed word, inline under the input.
-  const defs = seeds.length ? finder.definitionsFor(seeds[0]) : [];
+  // Definitions of the seed words, inline under the input.
+  const defs = seeds.flatMap((s) => {
+    const d = finder.definitionsFor(s, seeds.length > 1 ? 2 : 4);
+    return d.map((x) => ({ ...x, of: seeds.length > 1 ? s : x.of }));
+  });
   els.seedDef.hidden = !defs.length;
   els.seedDef.innerHTML = defs.map((d) => defLine(d)).join('<br>');
 }
@@ -217,7 +266,39 @@ let finderTimer = null;
 const queueFinder = () => { clearTimeout(finderTimer); finderTimer = setTimeout(runFinder, 250); };
 els.seedInput?.addEventListener('input', queueFinder);
 els.slWord?.addEventListener('input', () => { rebuildSlChips(); queueFinder(); });
-els.slPos?.addEventListener('change', queueFinder);
+
+// Stress-pattern builder: visual DUM/da chips instead of 1/0 notation.
+let stressPat = []; // e.g. ['1','0'] = DUM-da
+function renderStressChips() {
+  els.stressChips.innerHTML = '';
+  stressPat.forEach((s, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = `stress-chip ${s === '1' ? 'st-1' : 'st-0'}`;
+    b.textContent = s === '1' ? 'DUM' : 'da';
+    b.title = `Syllable ${i + 1}: ${s === '1' ? 'stressed' : 'unstressed'} — click to flip`;
+    b.addEventListener('click', () => {
+      stressPat[i] = stressPat[i] === '1' ? '0' : '1';
+      renderStressChips();
+      queueFinder();
+    });
+    els.stressChips.appendChild(b);
+  });
+  els.stressClear.hidden = !stressPat.length;
+  els.stressAdd.textContent = stressPat.length ? '+' : '+ syllable';
+}
+els.stressAdd?.addEventListener('click', () => {
+  if (stressPat.length >= 6) return;
+  // Sensible default: alternate, starting stressed.
+  stressPat.push(stressPat.length && stressPat[stressPat.length - 1] === '1' ? '0' : '1');
+  renderStressChips();
+  queueFinder();
+});
+els.stressClear?.addEventListener('click', () => {
+  stressPat = [];
+  renderStressChips();
+  queueFinder();
+});
 for (const el of Object.values(constraintEls)) {
   el?.addEventListener('input', queueFinder);
   el?.addEventListener('change', queueFinder);
@@ -225,9 +306,10 @@ for (const el of Object.values(constraintEls)) {
 els.finderClear?.addEventListener('click', () => {
   els.seedInput.value = '';
   els.slWord.value = '';
-  els.slPos.value = 'any';
+  stressPat = [];
+  renderStressChips();
   rebuildSlChips();
-  for (const el of Object.values(constraintEls)) el.value = '';
+  for (const el of Object.values(constraintEls)) { if (el) el.value = ''; }
   runFinder();
 });
 

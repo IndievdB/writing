@@ -278,7 +278,6 @@ export class Finder {
     // (WordNet direct members + curated links). One-hop chains are scored as
     // candidates but never used as bridge equivalences — "walk→pass→draw"
     // must not make "draw" count as meaning "walk".
-    const hood = new Map();
     for (const rawSeed of seeds) {
       const neighborhood = new Set();
       const stems = stem(rawSeed);
@@ -365,63 +364,9 @@ export class Finder {
         for (const m of directMembers) neighborhood.add(m);
         neighborhood.add(seed);
       }
-      hood.set(rawSeed, neighborhood);
     }
-
-    // Cross-seed gloss bridge: a candidate matched by seed A also counts for
-    // seed B when the candidate's own definition uses a word from B's synonym
-    // neighborhood ("saunter: walk LEISURELY…" ← slowly→easy→leisurely).
-    if (seeds.length > 1) {
-      for (const [word, c] of cand) {
-        for (const rawSeed of seeds) {
-          if (c.matched.has(rawSeed)) continue;
-          const nb = hood.get(rawSeed);
-          if (!nb || nb.size === 0 || nb.size > 400) continue;
-          let hit = null;
-          for (const si of this.byWord.get(word) ?? []) {
-            for (const t of this.glossTokens(si)) {
-              if (nb.has(t)) { hit = t; break; }
-            }
-            if (hit) break;
-          }
-          if (hit) {
-            c.score += 0.5;
-            c.matched.add(rawSeed);
-            if (c.reasons.size < 3) c.reasons.add(`defined with “${hit}” ≈ “${rawSeed}”`);
-          }
-        }
-      }
-    }
-
-    // Definition-phrase match: one single definition of the candidate covers
-    // EVERY seed ("saunter: walk leisurely…" for seeds walk+slowly). This is
-    // the reverse-dictionary jackpot — reward it decisively.
-    if (seeds.length > 1) {
-      for (const [word, c] of cand) {
-        for (const si of this.byWord.get(word) ?? []) {
-          const toks = this.glossTokens(si);
-          if (toks.size === 0) continue;
-          const coversAll = seeds.every((rawSeed) => {
-            if (toks.has(rawSeed)) return true;
-            const nb = hood.get(rawSeed);
-            if (!nb) return false;
-            for (const t of toks) if (nb.has(t)) return true;
-            return false;
-          });
-          if (coversAll) {
-            c.score += 0.8;
-            seeds.forEach((s) => c.matched.add(s));
-            if (c.reasons.size < 3) c.reasons.add('definition matches the whole query');
-            break;
-          }
-        }
-      }
-    }
-
-    // Words matching several distinct seeds are what the user is circling.
-    for (const c of cand.values()) {
-      if (c.matched.size > 1) c.score *= 1 + 0.6 * (c.matched.size - 1);
-    }
+    // Multiple seeds are ADDITIVE: each contributes its own synonyms to the
+    // pool. A word related to several seeds naturally sums their scores.
     return cand;
   }
 
@@ -432,61 +377,71 @@ export class Finder {
     const tests = [];
     const soft = [];
 
-    // "Sounds like": one target word; optionally a chosen subset of its
-    // sounds; optionally a position (start / anywhere / end). This subsumes
-    // alliteration (initial consonant + start), assonance (a vowel), and
-    // consonance (a consonant, anywhere).
-    if (c.sl?.word?.trim()) {
-      const target = this.phon(c.sl.word.trim().toLowerCase());
-      if (target && target.phones?.length) {
-        const pos = c.sl.pos || 'any';
-        // Region of the candidate the sounds must fall in: the start region
-        // runs through the first vowel, the end region from the last vowel.
-        const region = (p) => {
-          const ph = p.phones ?? [];
-          if (!ph.length) return ph;
-          if (pos === 'start') {
-            const i = ph.findIndex((x) => VOWELS.has(x));
-            return ph.slice(0, (i < 0 ? ph.length - 1 : i) + 1);
-          }
-          if (pos === 'end') {
-            let i = -1;
-            for (let k = ph.length - 1; k >= 0; k--) if (VOWELS.has(ph[k])) { i = k; break; }
-            return ph.slice(i < 0 ? 0 : i);
-          }
-          return ph;
-        };
-        const selected = (c.sl.selected ?? []).filter((s) => target.phones.includes(s));
-        if (selected.length) {
-          // Explicit sounds: every chosen sound must appear in the region.
-          tests.push((p, word) => {
-            if (word === c.sl.word) return false;
-            const r = region(p);
-            return selected.every((s) => r.includes(s));
-          });
-        } else {
-          // Loose mode: share enough distinct sounds with the target.
-          const distinct = [...new Set(target.phones)];
-          const need = Math.min(2, distinct.length);
-          tests.push((p, word) => {
-            if (word === c.sl.word) return false;
-            const r = region(p);
-            let n = 0;
-            for (const s of distinct) if (r.includes(s)) n++;
-            return n >= need;
-          });
-          soft.push((p) => {
-            const r = new Set(region(p));
-            let n = 0;
-            for (const s of distinct) if (r.has(s)) n++;
-            return (n / distinct.length) * 0.8;
-          });
-        }
-        // Both modes: sharing the target's stressed vowel or opening sound
-        // ranks higher — that's what the ear notices first.
-        soft.push((p) => (target.stressedVowel && p.stressedVowel === target.stressedVowel ? 0.5 : 0) +
-          (p.phones?.[0] === target.phones[0] ? 0.4 : 0));
+    // "Sounds like": one or more target words. Each carries an optional
+    // per-sound selection with a per-sound position (anywhere / at the start /
+    // at the end), and an optional "grouped" flag meaning the selected sounds
+    // must appear as one consecutive run in the result. This subsumes
+    // alliteration (opening cluster grouped at start), assonance (a vowel,
+    // anywhere), and consonance (a consonant, anywhere).
+    // The start region runs through the first vowel; end from the last vowel.
+    const region = (p, pos) => {
+      const ph = p.phones ?? [];
+      if (!ph.length || pos === 'any') return ph;
+      if (pos === 'start') {
+        const i = ph.findIndex((x) => VOWELS.has(x));
+        return ph.slice(0, (i < 0 ? ph.length - 1 : i) + 1);
       }
+      let i = -1;
+      for (let k = ph.length - 1; k >= 0; k--) if (VOWELS.has(ph[k])) { i = k; break; }
+      return ph.slice(i < 0 ? 0 : i);
+    };
+    const seqMatch = (ph, seq, mustStart, mustEnd) => {
+      if (!ph?.length || seq.length > ph.length) return false;
+      const last = ph.length - seq.length;
+      for (let s = mustStart ? 0 : 0; s <= (mustStart ? 0 : last); s++) {
+        if (mustEnd && s !== last) continue;
+        let ok = true;
+        for (let i = 0; i < seq.length; i++) if (ph[s + i] !== seq[i]) { ok = false; break; }
+        if (ok) return true;
+      }
+      return false;
+    };
+    for (const spec of Array.isArray(c.sl) ? c.sl : []) {
+      const target = this.phon((spec.word ?? '').trim().toLowerCase());
+      if (!target?.phones?.length) continue;
+      const sel = (spec.sel ?? []).filter((s) => s.ph);
+      if (sel.length >= 2 && spec.grouped) {
+        // Grouped: the chosen sounds, in order, as one consecutive run.
+        const seq = sel.map((s) => s.ph);
+        const mustStart = sel[0].pos === 'start';
+        const mustEnd = sel[sel.length - 1].pos === 'end';
+        tests.push((p, word) => word !== spec.word && seqMatch(p.phones, seq, mustStart, mustEnd));
+      } else if (sel.length) {
+        // Per-sound placement: each chosen sound in its own region.
+        tests.push((p, word) => {
+          if (word === spec.word) return false;
+          return sel.every((s) => region(p, s.pos ?? 'any').includes(s.ph));
+        });
+      } else {
+        // No specific sounds chosen: share enough distinct sounds overall.
+        const distinct = [...new Set(target.phones)];
+        const need = Math.min(2, distinct.length);
+        tests.push((p, word) => {
+          if (word === spec.word) return false;
+          let n = 0;
+          for (const s of distinct) if (p.phones?.includes(s)) n++;
+          return n >= need;
+        });
+        soft.push((p) => {
+          let n = 0;
+          for (const s of new Set(target.phones)) if (p.phones?.includes(s)) n++;
+          return (n / new Set(target.phones).size) * 0.8;
+        });
+      }
+      // Sharing the target's stressed vowel or opening sound ranks higher —
+      // that's what the ear notices first.
+      soft.push((p) => (target.stressedVowel && p.stressedVowel === target.stressedVowel ? 0.5 : 0) +
+        (p.phones?.[0] === target.phones[0] ? 0.4 : 0));
     }
     if (c.rhyme?.trim()) {
       const rp = this.phon(c.rhyme.trim().toLowerCase());

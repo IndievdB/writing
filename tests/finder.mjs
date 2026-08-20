@@ -33,24 +33,24 @@ check('"walk slowly" → saunter/amble/stroll', ['saunter', 'amble', 'stroll'].s
   words(walk).slice(0, 10).join(','));
 
 // Sounds-like with a selected initial consonant at the start = alliteration.
-const happyJ = finder.search({ seeds: ['happy'], constraints: { sl: { word: 'jolly', selected: ['JH'], pos: 'start' } } });
+const happyJ = finder.search({ seeds: ['happy'], constraints: { sl: [{ word: 'jolly', sel: [{ ph: 'JH', pos: 'start' }] }] } });
 check('happy + JH at start → jovial/joyful', words(happyJ).some((w) => /^j/.test(w)), words(happyJ).slice(0, 6).join(','));
 check('happy + JH at start: all start with J sound', happyJ.every((r) => r.info.phon.phones[0] === 'JH'));
 
 // Sounds-like with a selected vowel anywhere = assonance.
-const asson2 = finder.search({ seeds: ['bright'], constraints: { sl: { word: 'time', selected: ['AY'], pos: 'any' } } });
+const asson2 = finder.search({ seeds: ['bright'], constraints: { sl: [{ word: 'time', sel: [{ ph: 'AY', pos: 'any' }] }] } });
 check('bright + AY anywhere: all contain AY', asson2.length > 0 && asson2.every((r) => r.info.phon.phones.includes('AY')),
   words(asson2).slice(0, 6).join(','));
 
 // Sounds-like loose mode: no sounds selected, share ≥2 sounds.
-const loose = finder.search({ seeds: ['shine'], constraints: { sl: { word: 'silver', selected: [], pos: 'any' } } });
+const loose = finder.search({ seeds: ['shine'], constraints: { sl: [{ word: 'silver', sel: [] }] } });
 check('shine + sounds-like silver (loose)', loose.length > 0 && loose.every((r) => {
   const set = new Set(r.info.phon.phones);
   return ['S', 'IH', 'L', 'V', 'ER'].filter((x) => set.has(x)).length >= 2;
 }), words(loose).slice(0, 6).join(','));
 
 // Sounds-like at the end.
-const endM = finder.search({ constraints: { sl: { word: 'moon', selected: ['N'], pos: 'end' }, syll: '1' } });
+const endM = finder.search({ constraints: { sl: [{ word: 'moon', sel: [{ ph: 'N', pos: 'end' }] }], syll: '1' } });
 check('N at end, 1 syllable: all end-region has N', endM.length > 0 && endM.every((r) => {
   const ph = r.info.phon.phones;
   return ph.slice(-3).includes('N');
@@ -92,9 +92,38 @@ check('happy + concrete have ratings ≥3.5', conc.every((r) => r.info.conc >= 3
 // Empty search returns nothing (no seeds, no constraints).
 check('empty query → empty', finder.search({}).length === 0);
 
-// Multi-seed boost: word related to both seeds outranks single-seed match.
-const cold = finder.search({ seeds: ['cold', 'wind'] });
-check('multi-seed search returns results', cold.length > 0, words(cold).slice(0, 8).join(','));
+// Multiple seeds are additive: the pool holds synonyms of each seed.
+const both = finder.search({ seeds: ['fast', 'strong'] });
+check('fast+strong additive: quick AND mighty present',
+  words(both).includes('quick') && ['mighty', 'powerful', 'sturdy'].some((w) => words(both).includes(w)),
+  words(both).slice(0, 12).join(','));
+
+// Grouped sounds: B and R together at the start = "br-" cluster.
+const brGroup = finder.search({
+  constraints: {
+    sl: [{ word: 'brick', grouped: true, sel: [{ ph: 'B', pos: 'start' }, { ph: 'R', pos: 'any' }] }],
+    syll: '1',
+  },
+});
+check('grouped B+R at start: all begin with BR', brGroup.length > 0 &&
+  brGroup.every((r) => r.info.phon.phones[0] === 'B' && r.info.phon.phones[1] === 'R'),
+  words(brGroup).slice(0, 6).join(','));
+
+// Two sounds-like words at once: constraints from both apply.
+const twoSl = finder.search({
+  constraints: {
+    sl: [
+      { word: 'silver', sel: [{ ph: 'S', pos: 'start' }] },
+      { word: 'moon', sel: [{ ph: 'UW', pos: 'any' }] },
+    ],
+  },
+});
+check('two sounds-like words: S at start AND UW anywhere', twoSl.length > 0 &&
+  twoSl.every((r) => {
+    const ph = r.info.phon.phones;
+    const firstVowel = ph.findIndex((x) => ['AA','AE','AH','AO','AW','AY','EH','ER','EY','IH','IY','OW','OY','UH','UW'].includes(x));
+    return ph.slice(0, firstVowel + 1).includes('S') && ph.includes('UW');
+  }), words(twoSl).slice(0, 6).join(','));
 
 // No morphological derivatives of the seed in results.
 const walkPlain = finder.search({ seeds: ['walk'] });

@@ -322,6 +322,40 @@ td.num { font-variant-numeric: tabular-nums; }
   background: var(--accent); border-color: var(--accent); color: #fff;
 }
 .sl-chip:hover { border-color: var(--accent); }
+.sl-block {
+  display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap;
+  padding: 0.2rem 0.45rem; border: 1px dashed var(--hairline); border-radius: 10px;
+}
+.sl-wordlbl { font-size: 0.82rem; color: var(--ink-2); font-weight: 600; margin-right: 0.15rem; }
+.sl-group {
+  border: 1px solid var(--hairline); border-radius: 999px; background: none;
+  color: var(--ink-2); font-size: 0.75rem; padding: 0.12rem 0.55rem; cursor: pointer;
+}
+.sl-group.on { background: var(--aqua); border-color: var(--aqua); color: #fff; }
+.sl-group[hidden] { display: none; }
+
+/* ---------- stress-pattern builder ---------- */
+.stress-cell {
+  display: flex; flex-direction: column; gap: 0.18rem;
+  font-size: 0.8rem; color: var(--ink-2);
+}
+.stress-builder {
+  display: flex; align-items: center; gap: 0.25rem; flex-wrap: wrap;
+  border: 1px solid var(--hairline); border-radius: 7px;
+  padding: 0.22rem 0.4rem; background: var(--page); min-height: 2.05rem;
+}
+.stress-chip {
+  border: 1px solid var(--hairline); border-radius: 6px; cursor: pointer;
+  font-size: 0.78rem; font-family: ui-monospace, monospace; color: var(--ink);
+  padding: 0.1rem 0.4rem; background: var(--surface);
+}
+.stress-chip.st-1 { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.stress-chip.st-0 { color: var(--ink-2); }
+.stress-builder button#stress-add, .stress-builder button#stress-clear {
+  border: 1px dashed var(--hairline); border-radius: 6px; background: none;
+  color: var(--muted); font-size: 0.78rem; padding: 0.1rem 0.45rem; cursor: pointer;
+}
+.stress-builder button:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- definition popup ---------- */
 .def-popup {

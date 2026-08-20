@@ -6,7 +6,7 @@
 <title>Word Study</title>
 <meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=10">
+<link rel="stylesheet" href="css/style.css?v=11">
 </head>
 <body>
 <header class="site-header">
@@ -24,17 +24,12 @@
     </div>
     <label for="seed-input" class="visually-hidden">Meaning</label>
     <input id="seed-input" type="text" autocomplete="off" spellcheck="false" autofocus
-      placeholder="Meaning — one word: “big”, “faster”, “whisper”… or leave empty to search by sound alone">
+      placeholder="Meaning — one or more words: “big”, “fast strong”… synonyms of each are pooled together">
     <p id="seed-def" class="seed-def" hidden></p>
     <div class="soundslike-row">
       <label class="sl-word-label">Sounds like
-        <input id="c-slword" autocomplete="off" spellcheck="false" placeholder="a word: silver, moon, brick"></label>
-      <label class="sl-pos-label">where
-        <select id="c-slpos">
-          <option value="any">anywhere in the word</option>
-          <option value="start">at the start</option>
-          <option value="end">at the end</option>
-        </select></label>
+        <input id="c-slword" autocomplete="off" spellcheck="false"
+          placeholder="one or more words: silver moon brick"></label>
       <div id="sl-phones" class="sl-phones" role="group" aria-label="Sounds to match"></div>
     </div>
     <div class="constraint-grid">
@@ -42,8 +37,13 @@
         <input id="c-rhyme" autocomplete="off" placeholder="a word: light"></label>
       <label>Syllables
         <input id="c-syll" autocomplete="off" placeholder="2  or  1-3"></label>
-      <label>Stress pattern
-        <input id="c-stress" autocomplete="off" placeholder="1 = DUM · 01 = da-DUM · 10 = DUM-da"></label>
+      <div class="stress-cell"><span class="stress-title">Stress pattern</span>
+        <div class="stress-builder" role="group" aria-label="Stress pattern">
+          <span id="stress-chips"></span>
+          <button type="button" id="stress-add" title="Add a syllable">+ syllable</button>
+          <button type="button" id="stress-clear" title="Clear the pattern" hidden>×</button>
+        </div>
+      </div>
       <label>Type of word
         <select id="c-type">
           <option value="">any</option>
@@ -117,6 +117,6 @@
 
 </main>
 
-<script type="module" src="js/main.js?v=10"></script>
+<script type="module" src="js/main.js?v=11"></script>
 </body>
 </html>
