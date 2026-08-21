@@ -14,6 +14,7 @@ const finder = new Finder(lex);
 finder.loadThesaurus(read('thesaurus.txt'));
 let curated = false;
 try { finder.loadSynonyms(read('synonyms.txt')); curated = true; } catch { /* not built yet */ }
+try { finder.loadDefinitions(read('definitions.txt')); } catch { /* not built yet */ }
 
 let failures = 0;
 const check = (name, cond, extra = '') => {
@@ -92,11 +93,16 @@ check('happy + concrete have ratings ≥3.5', conc.every((r) => r.info.conc >= 3
 // Empty search returns nothing (no seeds, no constraints).
 check('empty query → empty', finder.search({}).length === 0);
 
-// Multiple seeds are additive: the pool holds synonyms of each seed.
-const both = finder.search({ seeds: ['fast', 'strong'] });
-check('fast+strong additive: quick AND mighty present',
-  words(both).includes('quick') && ['mighty', 'powerful', 'sturdy'].some((w) => words(both).includes(w)),
-  words(both).slice(0, 12).join(','));
+// Two words = phrase search: modifier + head.
+const youngMan = finder.search({ seeds: ['young', 'man'] });
+check('phrase "young man" → boy/lad/youth', ['boy', 'lad', 'youth'].every((w) => words(youngMan).slice(0, 8).includes(w)),
+  words(youngMan).slice(0, 8).join(','));
+const ranQuickly = finder.search({ seeds: ['ran', 'quickly'] });
+check('phrase "ran quickly" → dashed/raced past forms', ['dashed', 'raced', 'sprinted'].filter((w) => words(ranQuickly).includes(w)).length >= 2,
+  words(ranQuickly).slice(0, 8).join(','));
+const bigHouse = finder.search({ seeds: ['big', 'house'] });
+check('phrase "big house" → mansion/manor', ['mansion', 'manor', 'estate'].some((w) => words(bigHouse).slice(0, 8).includes(w)),
+  words(bigHouse).slice(0, 8).join(','));
 
 // Grouped sounds: B and R together at the start = "br-" cluster.
 const brGroup = finder.search({

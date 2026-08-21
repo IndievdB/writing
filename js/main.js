@@ -181,7 +181,7 @@ function runFinder() {
   // Multiple meanings are additive: synonyms of every seed, pooled.
   const seeds = els.seedInput.value.toLowerCase()
     .split(/[\s,;]+/).map((s) => s.replace(/[^a-z'\-]/g, '')).filter(Boolean)
-    .slice(0, 6);
+    .slice(0, 2);
   const constraints = {};
   for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el ? el.value : '';
   constraints.stress = stressPat.join('');

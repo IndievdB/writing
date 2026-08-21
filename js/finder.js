@@ -6,6 +6,22 @@ import { VOWELS } from './lexicon.js';
 import { classifyOrigin } from './etymology.js';
 import { FUNCTION_WORDS, IRREGULAR_PAST } from './wordlists.js';
 
+// Stopwords for the definition-text index (function words + defining
+// vocabulary that appears in half of all glosses).
+const DEF_STOP = new Set(`
+the and for with from that which who whom something someone person thing
+things way state act acts quality manner made make makes making one ones
+being having used uses especially usually often very into onto about
+`.trim().split(/\s+/));
+
+// A gloss token counts as the phrase-search genus only when it is not the
+// object of a preposition ("shelter for a dog" defines a shelter, not a dog).
+const PHRASE_PREP = new Set(['of', 'for', 'with', 'without', 'by', 'from', 'to',
+  'at', 'in', 'on', 'into', 'onto', 'upon', 'over', 'under', 'near', 'around',
+  'about', 'against', 'toward', 'towards', 'like', 'than', 'amid', 'among']);
+const PHRASE_DET = new Set(['a', 'an', 'the', 'its', 'his', 'her', 'their',
+  'your', 'our', 'one', 'two', 'many', 'some', 'each', 'every', 'another']);
+
 const GLOSS_STOP = new Set(`
 a an the of to in for on with or and by from as at that which who whom whose
 be is are was been being have has had do does did not no it its this these
@@ -55,12 +71,17 @@ export class Finder {
     this.infoCache = new Map();
     this.pool = null;         // frequency-ordered candidate words for seedless search
     this.curated = new Map(); // word -> Map(candidate -> weight), Claude-generated
+    this.curatedFwd = new Map(); // word -> Map(pos -> Map(syn -> weight)), own lines only
     this.curatedPos = new Map(); // word -> Set of POS letters (from curated lines)
     this.headPos = new Map();    // word -> Set of POS letters (own headword lines only)
     this.defs = new Map();    // word -> [{pos, gloss}], curated definitions
+    this.defIndex = new Map(); // definition token -> Set of headwords
+    this.defTokenCache = new Map();
   }
 
   // Curated definitions file: word \t POS \t definition (1-3 lines per word).
+  // Also builds an inverted index over definition text — the engine behind
+  // two-word searches ("young man" -> words defined as young + man).
   loadDefinitions(raw) {
     for (const line of raw.split('\n')) {
       if (!line) continue;
@@ -69,7 +90,29 @@ export class Finder {
       if (!this.defs.has(word)) this.defs.set(word, []);
       const list = this.defs.get(word);
       if (list.length < 3) list.push({ pos: pos || '', gloss });
+      for (const t of gloss.toLowerCase().split(/[^a-z]+/)) {
+        if (!t || t.length < 3 || DEF_STOP.has(t)) continue;
+        if (!this.defIndex.has(t)) this.defIndex.set(t, new Set());
+        this.defIndex.get(t).add(word);
+      }
     }
+  }
+
+  // Definition-text tokens of a word (cached), optionally restricted to
+  // glosses of one part of speech — a candidate noun's verb sense must not
+  // satisfy a noun query ("gulp N: a hurried swallow" vs "gulp V").
+  defTokens(word, pos = '') {
+    const key = pos ? `${word}\t${pos}` : word;
+    let s = this.defTokenCache.get(key);
+    if (!s) {
+      s = new Set();
+      for (const d of (this.defs.get(word) ?? [])) {
+        if (pos && d.pos && d.pos !== pos) continue;
+        for (const t of d.gloss.toLowerCase().split(/[^a-z]+/)) if (t.length >= 3) s.add(t);
+      }
+      this.defTokenCache.set(key, s);
+    }
+    return s;
   }
 
   // Claude-generated synonym file: word \t POS \t syn syn syn.
@@ -94,11 +137,15 @@ export class Finder {
         // Own-line POS is strong evidence; propagated POS (below) is noisy.
         if (!this.headPos.has(word)) this.headPos.set(word, new Set());
         this.headPos.get(word).add(pos);
+        if (!this.curatedFwd.has(word)) this.curatedFwd.set(word, new Map());
+        if (!this.curatedFwd.get(word).has(pos)) this.curatedFwd.get(word).set(pos, new Map());
       }
+      const fwd = pos ? this.curatedFwd.get(word).get(pos) : null;
       for (const s of synStr.split(' ')) {
         if (!s || s === word) continue;
         link(word, s, 1.3);
         link(s, word, 1.1);
+        if (fwd && !fwd.has(s)) fwd.set(s, 1.3);
         if (pos) addPos(s, pos); // synonyms on a J line are adjectives too
       }
     }
@@ -276,8 +323,10 @@ export class Finder {
         if (!pos.includes('V')) return null;
         const irr = IRREGULAR_PAST.get(c);
         if (irr) return [irr];
-        if (yStem) return [yStem + 'ied'];
-        return [c.endsWith('e') ? c + 'd' : dbl + 'ed'];
+        const form = yStem ? yStem + 'ied' : c.endsWith('e') ? c + 'd' : dbl + 'ed';
+        // Only attested pasts — an unlisted irregular ("splitted") or a junk
+        // stem ("revsed") must drop out, not surface fabricated.
+        return this.lex.phones.has(form) ? [form] : null;
       }
       case 'adverb': {
         if (!pos.includes('J')) return null;
@@ -549,9 +598,140 @@ export class Finder {
     return { tests, soft };
   }
 
+  // ---- two-word phrase search ----------------------------------------------
+  // "young man" -> lad, youth, boy. One word is the HEAD (what kind of thing
+  // comes back), the other the MODIFIER (a filter over candidate
+  // definitions). Nothing is precomputed per pair — composition happens here.
+
+  phraseRoles(a, b) {
+    // verb + manner adverb: "ran quickly" (head = verb, results are verbs)
+    const bAdv = b.endsWith('ly') || (this.posCap(b).includes('R') && !this.posCap(b).includes('N'));
+    if (bAdv && (this.posCap(a).includes('V') || this.detectInflection(a)?.kind)) {
+      return { head: a, mod: b, wantPos: 'V' };
+    }
+    // default English compound: modifier first, noun head last ("young man")
+    return { head: b, mod: a, wantPos: 'N' };
+  }
+
+  // True when some gloss of w mentions tok as part of what the word IS —
+  // "kennel: a shelter for a dog" mentions dog only after a preposition, so
+  // a kennel is not a kind of dog.
+  mentionsAsGenus(w, tok, pos = '') {
+    for (const d of (this.defs.get(w) ?? [])) {
+      if (pos && d.pos && d.pos !== pos) continue;
+      const toks = d.gloss.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] !== tok && toks[i] !== tok + 's') continue;
+        const prev = toks[i - 1] ?? '';
+        const prev2 = toks[i - 2] ?? '';
+        if (PHRASE_PREP.has(prev) || (PHRASE_DET.has(prev) && PHRASE_PREP.has(prev2))) continue;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  searchPhrase(a, b, constraints = {}, limit = 120) {
+    const { head, mod, wantPos } = this.phraseRoles(a, b);
+    const d = this.detectInflection(head);
+    let headLemma = d?.lemma ?? head;
+    let kind = d?.kind ?? null;
+    // "ran quickly": the adverb forces a verb reading, so an irregular past
+    // is safely the verb's past even when it is its own curated headword.
+    if (!kind && wantPos === 'V') {
+      for (const [lemma, past] of IRREGULAR_PAST) {
+        if (past === head && lemma !== head) { headLemma = lemma; kind = 'past'; break; }
+      }
+    }
+    // Sense discipline: expand head and modifier only through curated lines
+    // of the right POS when they exist ("wind" the noun must not pull in
+    // twist/snake/coil from "wind" the verb).
+    const posEntry = (w, p) => this.curatedFwd.get(w)?.get(p) ?? this.curated.get(w);
+
+    // Modifier cluster: the word, its lemma, and their curated synonyms.
+    const modPos = wantPos === 'V' ? 'R' : 'J';
+    const modD = this.detectInflection(mod);
+    const modLiteral = new Set([mod, modD?.lemma].filter(Boolean));
+    const modCluster = new Set(modLiteral);
+    for (const base of [...modLiteral]) {
+      for (const syn of (posEntry(base, modPos)?.keys() ?? [])) modCluster.add(syn);
+    }
+    // How strongly a candidate's definition matches the modifier.
+    const modHit = (w) => {
+      const toks = this.defTokens(w, wantPos);
+      for (const t of modLiteral) if (toks.has(t)) return 2;
+      for (const t of modCluster) if (toks.has(t)) return 1;
+      return 0;
+    };
+
+    // Candidate pool: words whose definition mentions the head, plus the
+    // head's own synonyms (fallback tier so results never come up empty).
+    const cands = new Map(); // word -> {score, reason}
+    const put = (w, score, reason) => {
+      if (w === head || w === headLemma || w === mod) return;
+      const prev = cands.get(w);
+      if (!prev || score > prev.score) cands.set(w, { score, reason });
+    };
+    const defHits = new Set([
+      ...(this.defIndex.get(headLemma) ?? []),
+      ...(this.defIndex.get(headLemma + 's') ?? []),
+    ]);
+    for (const w of defHits) {
+      if (!this.mentionsAsGenus(w, headLemma, wantPos)) continue;
+      const m = modHit(w);
+      if (m) put(w, 2 + m, m === 2 ? `defined as ${mod} + ${headLemma}` : `defined as ${headLemma}, ${mod}-like`);
+    }
+    const headEntry = posEntry(headLemma, wantPos) ?? new Map();
+    const headSyns = [...headEntry.keys()];
+    // Words defined via a synonym of the head ("dirge: a mournful funeral
+    // hymn" never says "song"). Only the head's own strong synonyms qualify
+    // as bridges — weak reverse links import cross-sense junk.
+    for (const [syn, wgt] of headEntry) {
+      if (wgt < 1.2) continue;
+      for (const w of (this.defIndex.get(syn) ?? [])) {
+        if (!this.mentionsAsGenus(w, syn, wantPos)) continue;
+        const m = modHit(w);
+        if (m) put(w, 1.6 + m, `defined as ${syn} (≈${headLemma}), ${mod}-like`);
+      }
+    }
+    for (const w of headSyns) {
+      const m = modHit(w);
+      put(w, 1 + m * 1.5, m ? `synonym of “${headLemma}”, ${mod}-matching` : `synonym of “${headLemma}”`);
+    }
+
+    const { tests, soft } = this.compileConstraints(constraints);
+    const results = [];
+    for (const [w, c] of cands) {
+      if (!this.posCap(w).includes(wantPos)) continue;
+      const surfaces = kind ? this.inflectFor(w, kind) : [w];
+      if (!surfaces) continue;
+      for (const surface of surfaces) {
+        if (surface === a || surface === b) continue;
+        const info = this.info(surface);
+        if (!info) continue;
+        if (!tests.every((t) => t(info.phon, surface))) continue;
+        let score = c.score;
+        for (const s of soft) score += s(info.phon) * 0.8;
+        const rank = info.freqRank ?? this.lex.freqRank(w) ?? 200000;
+        score += (5.4 - Math.log10(rank)) * 0.1;
+        results.push({ word: surface, score, info, reasons: [c.reason] });
+      }
+    }
+    const bySurface = new Map();
+    for (const r of results) {
+      const prev = bySurface.get(r.word);
+      if (!prev || r.score > prev.score) bySurface.set(r.word, r);
+    }
+    return [...bySurface.values()].sort((x, y) => y.score - x.score).slice(0, limit);
+  }
+
   // ---- main entry ----------------------------------------------------------
 
   search({ seeds = [], constraints = {}, limit = 120 }) {
+    // Two words = phrase search: head + modifier ("young man", "ran quickly").
+    if (seeds.length === 2) {
+      return this.searchPhrase(seeds[0], seeds[1], constraints, limit);
+    }
     // Inflection awareness: an inflected seed ("faster", "running", "cats")
     // searches on its lemma, and every result is re-inflected to match.
     const originalSeeds = new Set(seeds);
