@@ -218,10 +218,15 @@ export class Finder {
         ?? cs.find((x) => this.byWord.has(x))
         ?? cs.find((x) => this.lex.freq.has(x));
     };
-    // Comparative detection needs STRONG adjective evidence — the lemma's own
-    // curated J line or the Brill lexicon — not propagated tags, or "tester"
-    // becomes "more test".
-    const jish = (l) => (this.headPos.get(l)?.has('J') ?? false) || this.lex.posFor(l).includes('J');
+    // Comparative detection needs STRONG adjective evidence. A lemma's own
+    // curated headword lines are authoritative when they exist (jump: N,V —
+    // so "jumper" is an agent noun despite Brill's noisy J tag); Brill is
+    // only the fallback for words without curated lines.
+    const jish = (l) => {
+      const own = this.headPos.get(l);
+      if (own) return own.has('J');
+      return this.lex.posFor(l).includes('J');
+    };
     const vish = (l) => this.posCap(l).includes('V');
     let l;
     if (w.endsWith('ier') && (l = pick([w.slice(0, -3) + 'y'])) && jish(l)) return { lemma: l, kind: 'comparative' };
@@ -611,6 +616,17 @@ export class Finder {
         if (results.length >= cap) break;
       }
     }
+    // Sparse inflected search: union in a direct search of the typed word —
+    // "baker" the surface word has WordNet data its lemma path can't reach.
+    if (kind && results.length < 5 && originalSeeds.size === 1) {
+      const kept = kind;
+      kind = null;
+      seeds = [...originalSeeds];
+      const cand = this.seedCandidates(seeds);
+      for (const [word, c] of cand) consider(word, c);
+      kind = kept;
+    }
+
     // Two lemmas can inflect to the same surface — keep the best-scored one.
     const bySurface = new Map();
     for (const r of results) {
