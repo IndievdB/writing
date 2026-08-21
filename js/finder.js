@@ -22,6 +22,12 @@ const PHRASE_PREP = new Set(['of', 'for', 'with', 'without', 'by', 'from', 'to',
 const PHRASE_DET = new Set(['a', 'an', 'the', 'its', 'his', 'her', 'their',
   'your', 'our', 'one', 'two', 'many', 'some', 'each', 'every', 'another']);
 
+// Heads that denote a person: "fast man" should match words defined as
+// "a person who ..." even though the gloss never says "man".
+const PHRASE_PERSON_HEADS = new Set(['man', 'woman', 'person', 'people',
+  'human', 'guy', 'gal', 'fellow', 'dude', 'chap', 'bloke', 'lady',
+  'gentleman', 'boy', 'girl', 'kid', 'child', 'adult', 'individual']);
+
 const GLOSS_STOP = new Set(`
 a an the of to in for on with or and by from as at that which who whom whose
 be is are was been being have has had do does did not no it its this these
@@ -76,6 +82,7 @@ export class Finder {
     this.headPos = new Map();    // word -> Set of POS letters (own headword lines only)
     this.defs = new Map();    // word -> [{pos, gloss}], curated definitions
     this.defIndex = new Map(); // definition token -> Set of headwords
+    this.personIndex = new Set(); // headwords defined as "a person who ..."
     this.defTokenCache = new Map();
   }
 
@@ -90,6 +97,11 @@ export class Finder {
       if (!this.defs.has(word)) this.defs.set(word, []);
       const list = this.defs.get(word);
       if (list.length < 3) list.push({ pos: pos || '', gloss });
+      // "person" and "someone" are index stopwords, so person-denoting words
+      // get their own index — how "fast man" reaches "a person who runs fast".
+      if ((!pos || pos === 'N') && /\b(person|someone|somebody|people|one)\s+who\b|\ba person\b/.test(gloss)) {
+        this.personIndex.add(word);
+      }
       for (const t of gloss.toLowerCase().split(/[^a-z]+/)) {
         if (!t || t.length < 3 || DEF_STOP.has(t)) continue;
         if (!this.defIndex.has(t)) this.defIndex.set(t, new Set());
@@ -101,12 +113,21 @@ export class Finder {
   // Definition-text tokens of a word (cached), optionally restricted to
   // glosses of one part of speech — a candidate noun's verb sense must not
   // satisfy a noun query ("gulp N: a hurried swallow" vs "gulp V").
+  // Glosses of a word, falling back to its lemma's glosses for inflected
+  // forms the definitions file doesn't list ("strolled" -> "stroll").
+  glossesOf(word) {
+    const own = this.defs.get(word);
+    if (own) return own;
+    const d = this.detectInflection(word);
+    return (d && this.defs.get(d.lemma)) || [];
+  }
+
   defTokens(word, pos = '') {
     const key = pos ? `${word}\t${pos}` : word;
     let s = this.defTokenCache.get(key);
     if (!s) {
       s = new Set();
-      for (const d of (this.defs.get(word) ?? [])) {
+      for (const d of this.glossesOf(word)) {
         if (pos && d.pos && d.pos !== pos) continue;
         for (const t of d.gloss.toLowerCase().split(/[^a-z]+/)) if (t.length >= 3) s.add(t);
       }
@@ -613,24 +634,6 @@ export class Finder {
     return { head: b, mod: a, wantPos: 'N' };
   }
 
-  // True when some gloss of w mentions tok as part of what the word IS —
-  // "kennel: a shelter for a dog" mentions dog only after a preposition, so
-  // a kennel is not a kind of dog.
-  mentionsAsGenus(w, tok, pos = '') {
-    for (const d of (this.defs.get(w) ?? [])) {
-      if (pos && d.pos && d.pos !== pos) continue;
-      const toks = d.gloss.toLowerCase().split(/[^a-z]+/).filter(Boolean);
-      for (let i = 0; i < toks.length; i++) {
-        if (toks[i] !== tok && toks[i] !== tok + 's') continue;
-        const prev = toks[i - 1] ?? '';
-        const prev2 = toks[i - 2] ?? '';
-        if (PHRASE_PREP.has(prev) || (PHRASE_DET.has(prev) && PHRASE_PREP.has(prev2))) continue;
-        return true;
-      }
-    }
-    return false;
-  }
-
   searchPhrase(a, b, constraints = {}, limit = 120) {
     const { head, mod, wantPos } = this.phraseRoles(a, b);
     const d = this.detectInflection(head);
@@ -656,12 +659,58 @@ export class Finder {
     for (const base of [...modLiteral]) {
       for (const syn of (posEntry(base, modPos)?.keys() ?? [])) modCluster.add(syn);
     }
-    // How strongly a candidate's definition matches the modifier.
+    // Glosses describe actions with adverbs ("runs fast", "moves quickly"),
+    // so an adjective modifier also matches through its attested -ly forms.
+    if (wantPos === 'N') {
+      const advForms = (w) => (this.posCap(w).includes('J') && this.inflectFor(w, 'adverb')) || [];
+      for (const w of [...modLiteral]) for (const f of advForms(w)) modLiteral.add(f);
+      for (const w of [...modCluster]) for (const f of advForms(w)) modCluster.add(f);
+    }
+    // How strongly a candidate's definitions match the modifier (any gloss).
     const modHit = (w) => {
       const toks = this.defTokens(w, wantPos);
       for (const t of modLiteral) if (toks.has(t)) return 2;
       for (const t of modCluster) if (toks.has(t)) return 1;
       return 0;
+    };
+    // Sense coherence for the definition tiers: the genus and the modifier
+    // must appear in the SAME gloss. "whiz: a skilled person / move fast" is
+    // a skilled person or a fast movement — never a fast person.
+    const gvCache = new Map();
+    const glossViews = (w) => {
+      let gv = gvCache.get(w);
+      if (!gv) {
+        gv = this.glossesOf(w)
+          .filter((g) => !g.pos || g.pos === wantPos)
+          .map((g) => {
+            const toks = g.gloss.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+            return { toks, set: new Set(toks) };
+          });
+        gvCache.set(w, gv);
+      }
+      return gv;
+    };
+    const modIn = (set) => {
+      for (const t of modLiteral) if (set.has(t)) return 2;
+      for (const t of modCluster) if (set.has(t)) return 1;
+      return 0;
+    };
+    const genusIn = (toks, tok) => {
+      for (let i = 0; i < toks.length; i++) {
+        if (toks[i] !== tok && toks[i] !== tok + 's') continue;
+        const prev = toks[i - 1] ?? '';
+        const prev2 = toks[i - 2] ?? '';
+        if (PHRASE_PREP.has(prev) || (PHRASE_DET.has(prev) && PHRASE_PREP.has(prev2))) continue;
+        return true;
+      }
+      return false;
+    };
+    const genusMod = (w, tok) => {
+      let best = 0;
+      for (const g of glossViews(w)) {
+        if (genusIn(g.toks, tok)) best = Math.max(best, modIn(g.set));
+      }
+      return best;
     };
 
     // Candidate pool: words whose definition mentions the head, plus the
@@ -677,9 +726,20 @@ export class Finder {
       ...(this.defIndex.get(headLemma + 's') ?? []),
     ]);
     for (const w of defHits) {
-      if (!this.mentionsAsGenus(w, headLemma, wantPos)) continue;
-      const m = modHit(w);
+      const m = genusMod(w, headLemma);
       if (m) put(w, 2 + m, m === 2 ? `defined as ${mod} + ${headLemma}` : `defined as ${headLemma}, ${mod}-like`);
+    }
+    // Person heads also match generic person-glosses: "sprinter: a person
+    // who runs fast" answers "fast man" without the gloss saying "man".
+    if (wantPos === 'N' && PHRASE_PERSON_HEADS.has(headLemma)) {
+      for (const w of this.personIndex) {
+        let m = 0;
+        for (const t of ['person', 'someone', 'somebody', 'people']) {
+          m = Math.max(m, genusMod(w, t));
+          if (m === 2) break;
+        }
+        if (m) put(w, 1.8 + m, `a ${mod} person`);
+      }
     }
     const headEntry = posEntry(headLemma, wantPos) ?? new Map();
     const headSyns = [...headEntry.keys()];
@@ -689,8 +749,7 @@ export class Finder {
     for (const [syn, wgt] of headEntry) {
       if (wgt < 1.2) continue;
       for (const w of (this.defIndex.get(syn) ?? [])) {
-        if (!this.mentionsAsGenus(w, syn, wantPos)) continue;
-        const m = modHit(w);
+        const m = genusMod(w, syn);
         if (m) put(w, 1.6 + m, `defined as ${syn} (≈${headLemma}), ${mod}-like`);
       }
     }
