@@ -74,7 +74,7 @@ def main() -> None:
         refine_dir = Path(sys.argv[2])
         refined_words = set()
         refined: dict[tuple[str, str], list[str]] = {}
-        for f in sorted(refine_dir.glob("refined-*.txt")):
+        for f in sorted([*refine_dir.glob("refined-*.txt"), *refine_dir.glob("syn-*.txt")]):
             for raw in f.read_text().splitlines():
                 if not raw.strip():
                     continue
