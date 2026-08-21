@@ -56,6 +56,7 @@ export class Finder {
     this.pool = null;         // frequency-ordered candidate words for seedless search
     this.curated = new Map(); // word -> Map(candidate -> weight), Claude-generated
     this.curatedPos = new Map(); // word -> Set of POS letters (from curated lines)
+    this.headPos = new Map();    // word -> Set of POS letters (own headword lines only)
     this.defs = new Map();    // word -> [{pos, gloss}], curated definitions
   }
 
@@ -88,7 +89,12 @@ export class Finder {
       if (!line) continue;
       const [word, pos, synStr] = line.split('\t');
       if (!word || !synStr) continue;
-      if (pos) addPos(word, pos);
+      if (pos) {
+        addPos(word, pos);
+        // Own-line POS is strong evidence; propagated POS (below) is noisy.
+        if (!this.headPos.has(word)) this.headPos.set(word, new Set());
+        this.headPos.get(word).add(pos);
+      }
       for (const s of synStr.split(' ')) {
         if (!s || s === word) continue;
         link(word, s, 1.3);
@@ -198,10 +204,24 @@ export class Finder {
   // re-inflect each result ("faster" -> quicker, speedier, more rapid).
 
   detectInflection(w) {
-    const known = (x) => x.length >= 2 && (this.curated.has(x) || this.byWord.has(x) || this.lex.freq.has(x));
+    // A word with a substantive curated entry is its own headword — don't
+    // reinterpret it as an inflection ("sober" is not "more sob"). Thin
+    // stray entries (a couple of links) don't block inflection search.
+    if ((this.curated.get(w)?.size ?? 0) >= 5) return null;
     const undouble = (x) => (/(.)\1$/.test(x) ? x.slice(0, -1) : null);
-    const pick = (cands) => cands.filter(Boolean).find(known);
-    const jish = (l) => this.posCap(l).includes('J');
+    // Tiered lemma pick: curated headwords beat WordNet words beat bare
+    // frequency-list tokens (the subtitle list contains junk like "rac"
+    // that would otherwise shadow "race").
+    const pick = (cands) => {
+      const cs = cands.filter((x) => x && x.length >= 2);
+      return cs.find((x) => this.curated.has(x))
+        ?? cs.find((x) => this.byWord.has(x))
+        ?? cs.find((x) => this.lex.freq.has(x));
+    };
+    // Comparative detection needs STRONG adjective evidence — the lemma's own
+    // curated J line or the Brill lexicon — not propagated tags, or "tester"
+    // becomes "more test".
+    const jish = (l) => (this.headPos.get(l)?.has('J') ?? false) || this.lex.posFor(l).includes('J');
     const vish = (l) => this.posCap(l).includes('V');
     let l;
     if (w.endsWith('ier') && (l = pick([w.slice(0, -3) + 'y'])) && jish(l)) return { lemma: l, kind: 'comparative' };
@@ -210,7 +230,11 @@ export class Finder {
     if (w.endsWith('ied') && (l = pick([w.slice(0, -3) + 'y'])) && vish(l)) return { lemma: l, kind: 'past' };
     if (w.endsWith('ed') && w.length > 4 && (l = pick([undouble(w.slice(0, -2)), w.slice(0, -2), w.slice(0, -1)])) && vish(l)) return { lemma: l, kind: 'past' };
     if (w.endsWith('est') && w.length > 4 && (l = pick([undouble(w.slice(0, -3)), w.slice(0, -3), w.slice(0, -2)])) && jish(l)) return { lemma: l, kind: 'superlative' };
-    if (w.endsWith('er') && w.length > 3 && (l = pick([undouble(w.slice(0, -2)), w.slice(0, -2), w.slice(0, -1)])) && jish(l)) return { lemma: l, kind: 'comparative' };
+    if (w.endsWith('er') && w.length > 3 && (l = pick([undouble(w.slice(0, -2)), w.slice(0, -2), w.slice(0, -1)]))) {
+      if (jish(l)) return { lemma: l, kind: 'comparative' };
+      if (vish(l)) return { lemma: l, kind: 'agent' }; // tester = one who tests
+    }
+    if (w.endsWith('or') && w.length > 4 && (l = pick([w.slice(0, -2), w.slice(0, -2) + 'e'])) && vish(l)) return { lemma: l, kind: 'agent' };
     if (w.endsWith('ily') && (l = pick([w.slice(0, -3) + 'y'])) && jish(l)) return { lemma: l, kind: 'adverb' };
     if (w.endsWith('ly') && w.length > 4 && (l = pick([w.slice(0, -2), w.slice(0, -2) + 'e'])) && jish(l)) return { lemma: l, kind: 'adverb' };
     if (w.endsWith('ies') && w.length > 4 && (l = pick([w.slice(0, -3) + 'y']))) return { lemma: l, kind: 'sform' };
@@ -257,6 +281,18 @@ export class Finder {
         // adverbs (fast, hard) come back as themselves.
         if (this.lex.phones.has(adv)) return [adv];
         return pos.includes('R') ? [c] : null;
+      }
+      case 'agent': {
+        // One-who-does noun: race -> sprinter, speeder. Only attested words —
+        // both pronounceable and in the frequency list — no fabrications.
+        if (!pos.includes('V')) return null;
+        const forms = c.endsWith('e')
+          ? [c + 'r', c.slice(0, -1) + 'or']
+          : [c + 'er', dbl + 'er', c + 'or'];
+        for (const form of [...new Set(forms)]) {
+          if (this.lex.phones.has(form) && this.lex.freq.has(form)) return [form];
+        }
+        return null;
       }
       case 'comparative':
       case 'superlative': {
@@ -309,11 +345,11 @@ export class Finder {
 
         // Curated (Claude-generated) synonyms: the strongest signal, plus a
         // shallow second hop through the curated graph only.
-        // When a seed has curated synonyms, use ONLY the curated graph —
-        // WordNet synsets and gloss matches are fallback for uncovered words,
-        // not extra noise for covered ones ("fast" gloss-matching destroyer,
-        // "a small fast warship").
-        const curatedOnly = stems.some((s) => this.curated.has(s));
+        // When a seed has a reasonably rich curated entry, use ONLY the
+        // curated graph — WordNet synsets and gloss matches are fallback for
+        // uncovered or thin words, not extra noise for covered ones ("fast"
+        // gloss-matching destroyer, "a small fast warship").
+        const curatedOnly = stems.some((s) => (this.curated.get(s)?.size ?? 0) >= 5);
         const cur = this.curated.get(seed);
         if (cur) {
           for (const [m, w] of cur) {

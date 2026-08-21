@@ -154,8 +154,14 @@ if (curated) {
   check('fast: no gloss junk (destroyer/black/thunder)', !['destroyer', 'black', 'thunder', 'relax', 'trap'].some((w) => words(fast).includes(w)),
     words(fast).slice(0, 10).join(','));
   const quickly = finder.search({ seeds: ['quickly'] });
-  check('quickly → swiftly/rapidly, no fabricated fastly', words(quickly).slice(0, 10).includes('swiftly') && !words(quickly).includes('fastly'),
+  check('quickly → swiftly/rapidly, no fabricated fastly', words(quickly).includes('swiftly') && words(quickly).includes('rapidly') && !words(quickly).includes('fastly'),
     words(quickly).slice(0, 8).join(','));
+  const tester = finder.search({ seeds: ['tester'] });
+  check('tester → agent nouns, no "more trial"', words(tester).includes('examiner') && !words(tester).some((w) => w.startsWith('more ')),
+    words(tester).slice(0, 8).join(','));
+  const racer = finder.search({ seeds: ['racer'] });
+  check('racer → sprinter/speeder agent forms', ['sprinter', 'speeder'].every((w) => words(racer).includes(w)),
+    words(racer).slice(0, 8).join(','));
   const walked = finder.search({ seeds: ['walked'] });
   check('walked → strolled/marched (past forms)', ['strolled', 'marched', 'paced'].some((w) => words(walked).slice(0, 10).includes(w)),
     words(walked).slice(0, 8).join(','));
