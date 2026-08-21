@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Merge curated definition chunk files into data/definitions.txt.
 
-Usage: python3 tools/merge_definitions.py <dir>
-Files def-*.txt: word\tP\tdefinition. Keeps at most 3 per headword.
+Usage: python3 tools/merge_definitions.py <dir> [<dir> ...]
+Files def*.txt: word\tP\tdefinition. Keeps at most 3 per headword;
+earlier directories win when a word appears in several.
 """
 import re
 import sys
@@ -12,10 +13,10 @@ LINE_RE = re.compile(r"^([a-z][a-z'\-]*)\t([NVJR]?)\t([\x20-\x7e’–—]{3,140
 
 def main() -> None:
     repo = Path(__file__).resolve().parent.parent
-    src = Path(sys.argv[1])
     merged: dict[str, list[tuple[str, str]]] = {}
     bad = 0
-    for f in sorted(src.glob("def-*.txt")):
+    files = [f for d in sys.argv[1:] for f in sorted(Path(d).glob("def*.txt"))]
+    for f in files:
         for raw in f.read_text().splitlines():
             if not raw.strip():
                 continue

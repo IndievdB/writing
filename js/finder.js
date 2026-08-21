@@ -178,6 +178,7 @@ export class Finder {
     let s = '';
     const cur = this.curatedPos.get(word);
     if (cur) s += [...cur].join('');
+    for (const d of (this.defs.get(word) ?? [])) if (d.pos && !s.includes(d.pos)) s += d.pos;
     return s + this.lex.posFor(word);
   }
 
@@ -634,6 +635,20 @@ export class Finder {
     return { head: b, mod: a, wantPos: 'N' };
   }
 
+  // All attested agent nouns of defined verbs: [["sprinter","sprint"], ...].
+  // Built once, on first phrase search with a person head.
+  agentNouns() {
+    if (!this._agentNouns) {
+      this._agentNouns = [];
+      for (const [w, senses] of this.defs) {
+        if (!senses.some((g) => !g.pos || g.pos === 'V')) continue;
+        const forms = this.inflectFor(w, 'agent');
+        if (forms) this._agentNouns.push([forms[0], w]);
+      }
+    }
+    return this._agentNouns;
+  }
+
   searchPhrase(a, b, constraints = {}, limit = 120) {
     const { head, mod, wantPos } = this.phraseRoles(a, b);
     const d = this.detectInflection(head);
@@ -659,12 +674,16 @@ export class Finder {
     for (const base of [...modLiteral]) {
       for (const syn of (posEntry(base, modPos)?.keys() ?? [])) modCluster.add(syn);
     }
-    // Glosses describe actions with adverbs ("runs fast", "moves quickly"),
-    // so an adjective modifier also matches through its attested -ly forms.
+    // Glosses describe actions with adverbs ("runs fast", "moves quickly")
+    // and nouns ("a contest of speed"), so an adjective modifier also
+    // matches through its attested -ly forms and -y noun stems.
     if (wantPos === 'N') {
       const advForms = (w) => (this.posCap(w).includes('J') && this.inflectFor(w, 'adverb')) || [];
       for (const w of [...modLiteral]) for (const f of advForms(w)) modLiteral.add(f);
-      for (const w of [...modCluster]) for (const f of advForms(w)) modCluster.add(f);
+      for (const w of [...modCluster]) {
+        for (const f of advForms(w)) modCluster.add(f);
+        if (w.endsWith('y') && this.lex.phones.has(w.slice(0, -1))) modCluster.add(w.slice(0, -1));
+      }
     }
     // How strongly a candidate's definitions match the modifier (any gloss).
     const modHit = (w) => {
@@ -729,8 +748,8 @@ export class Finder {
       const m = genusMod(w, headLemma);
       if (m) put(w, 2 + m, m === 2 ? `defined as ${mod} + ${headLemma}` : `defined as ${headLemma}, ${mod}-like`);
     }
-    // Person heads also match generic person-glosses: "sprinter: a person
-    // who runs fast" answers "fast man" without the gloss saying "man".
+    // Person heads also match generic person-glosses: "wit: a person with a
+    // quick sense of humor" answers "funny man" without saying "man".
     if (wantPos === 'N' && PHRASE_PERSON_HEADS.has(headLemma)) {
       for (const w of this.personIndex) {
         let m = 0;
@@ -739,6 +758,22 @@ export class Finder {
           if (m === 2) break;
         }
         if (m) put(w, 1.8 + m, `a ${mod} person`);
+      }
+      // And agent nouns of matching verbs: "fast man" -> race ("move very
+      // fast") -> racer. Attested -er/-or forms only; never a surface whose
+      // own definition is a thing, not a person ("zipper" is a fastener);
+      // and only LITERAL modifier matches — cluster synonyms drag in cross-
+      // sense verbs ("fix: fasten firmly" is not a fast action).
+      for (const [agent, verb] of this.agentNouns()) {
+        if (this.defs.has(agent) && !this.personIndex.has(agent)) continue;
+        let m = 0;
+        for (const g of this.glossesOf(verb)) {
+          if (g.pos && g.pos !== 'V') continue;
+          const set = new Set(g.gloss.toLowerCase().split(/[^a-z]+/));
+          m = Math.max(m, modIn(set));
+          if (m === 2) break;
+        }
+        if (m === 2) put(agent, 1.7 + m, `one who ${verb}s ${mod}`);
       }
     }
     const headEntry = posEntry(headLemma, wantPos) ?? new Map();
