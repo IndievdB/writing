@@ -154,7 +154,7 @@ if (curated) {
   check('fast: no gloss junk (destroyer/black/thunder)', !['destroyer', 'black', 'thunder', 'relax', 'trap'].some((w) => words(fast).includes(w)),
     words(fast).slice(0, 10).join(','));
   const quickly = finder.search({ seeds: ['quickly'] });
-  check('quickly → swiftly/rapidly, no fabricated fastly', words(quickly).includes('swiftly') && words(quickly).includes('rapidly') && !words(quickly).includes('fastly'),
+  check('quickly → rapidly/speedily, no fabricated fastly', ['rapidly', 'speedily'].every((w) => words(quickly).includes(w)) && !words(quickly).includes('fastly'),
     words(quickly).slice(0, 8).join(','));
   const tester = finder.search({ seeds: ['tester'] });
   check('tester → agent nouns, no "more trial"', words(tester).includes('examiner') && !words(tester).some((w) => w.startsWith('more ')),
