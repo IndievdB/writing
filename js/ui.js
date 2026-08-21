@@ -67,6 +67,8 @@ function renderRhythm(result, container) {
 
 // ---------------------------------------------------------------------------
 
+const FINDER_PAGE = 48;
+
 export function renderFinderResults(results, el, statusEl, onInsert, query) {
   el.innerHTML = '';
   if (!results.length) {
@@ -75,23 +77,39 @@ export function renderFinderResults(results, el, statusEl, onInsert, query) {
       : 'No words match — loosen a constraint (stress pattern and rhyme are the strictest).';
     return;
   }
-  statusEl.textContent = `${results.length} word${results.length === 1 ? '' : 's'} — click one to insert it into your sentence at the cursor. Hover for details.`;
-  const frag = document.createDocumentFragment();
-  for (const r of results) {
-    const chip = document.createElement('button');
-    chip.type = 'button';
-    chip.className = 'word-chip';
-    chip.dataset.word = r.word;
-    const stress = (r.info.phon.dictStresses ?? r.info.phon.stresses)
-      .map((s) => (s >= 1 ? '´' : '˘')).join('');
-    chip.innerHTML = `<span class="chip-word">${esc(r.word)}</span><span class="chip-meta">${stress}</span>`;
-    const bits = [r.info.phon.rawPhones?.join(' ')];
-    if (r.reasons.length) bits.push(r.reasons.join('; '));
-    if (r.info.ety.origin !== 'neutral') bits.push(r.info.ety.origin);
-    if (r.info.conc != null) bits.push(`concreteness ${(r.info.conc / 100).toFixed(1)}/5`);
-    chip.title = bits.filter(Boolean).join('\n');
-    chip.addEventListener('click', () => onInsert(r.word));
-    frag.appendChild(chip);
-  }
-  el.appendChild(frag);
+  const show = (count) => {
+    el.innerHTML = '';
+    const visible = results.slice(0, count);
+    statusEl.textContent = (visible.length < results.length
+      ? `showing ${visible.length} of ${results.length} words`
+      : `${results.length} word${results.length === 1 ? '' : 's'}`)
+      + ' — click one to insert it into your sentence at the cursor. Hover for details.';
+    const frag = document.createDocumentFragment();
+    for (const r of visible) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'word-chip';
+      chip.dataset.word = r.word;
+      const stress = (r.info.phon.dictStresses ?? r.info.phon.stresses)
+        .map((s) => (s >= 1 ? '´' : '˘')).join('');
+      chip.innerHTML = `<span class="chip-word">${esc(r.word)}</span><span class="chip-meta">${stress}</span>`;
+      const bits = [r.info.phon.rawPhones?.join(' ')];
+      if (r.reasons.length) bits.push(r.reasons.join('; '));
+      if (r.info.ety.origin !== 'neutral') bits.push(r.info.ety.origin);
+      if (r.info.conc != null) bits.push(`concreteness ${(r.info.conc / 100).toFixed(1)}/5`);
+      chip.title = bits.filter(Boolean).join('\n');
+      chip.addEventListener('click', () => onInsert(r.word));
+      frag.appendChild(chip);
+    }
+    if (visible.length < results.length) {
+      const more = document.createElement('button');
+      more.type = 'button';
+      more.className = 'show-more';
+      more.textContent = `show ${Math.min(FINDER_PAGE, results.length - visible.length)} more`;
+      more.addEventListener('click', () => show(count + FINDER_PAGE));
+      frag.appendChild(more);
+    }
+    el.appendChild(frag);
+  };
+  show(FINDER_PAGE);
 }

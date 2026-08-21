@@ -104,6 +104,17 @@ const bigHouse = finder.search({ seeds: ['big', 'house'] });
 check('phrase "big house" → mansion/manor', ['mansion', 'manor', 'estate'].some((w) => words(bigHouse).slice(0, 8).includes(w)),
   words(bigHouse).slice(0, 8).join(','));
 
+// Multiple comma-separated queries: results of every group, interleaved.
+const multi = finder.searchMulti([['big'], ['fast']]);
+check('multi "big, fast" → large AND quick near top', words(multi).slice(0, 6).includes('large') && words(multi).slice(0, 6).includes('quick'),
+  words(multi).slice(0, 8).join(','));
+const multiPhrase = finder.searchMulti([['young', 'man'], ['ran', 'quickly']]);
+check('multi phrase groups → boy AND a past run verb', words(multiPhrase).slice(0, 6).includes('boy') &&
+  ['bolted', 'raced', 'dashed', 'hastened'].some((w) => words(multiPhrase).slice(0, 6).includes(w)),
+  words(multiPhrase).slice(0, 8).join(','));
+check('multi results are deduped', new Set(words(multi)).size === multi.length);
+check('searchMulti single group = search', words(finder.searchMulti([['big']])).join() === words(finder.search({ seeds: ['big'] })).join());
+
 // Grouped sounds: B and R together at the start = "br-" cluster.
 const brGroup = finder.search({
   constraints: {

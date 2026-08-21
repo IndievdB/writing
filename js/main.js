@@ -178,10 +178,14 @@ function rebuildSlChips() {
 
 function runFinder() {
   if (!lexicon.ready) return;
-  // Multiple meanings are additive: synonyms of every seed, pooled.
-  const seeds = els.seedInput.value.toLowerCase()
-    .split(/[\s,;]+/).map((s) => s.replace(/[^a-z'\-]/g, '')).filter(Boolean)
-    .slice(0, 2);
+  // Comma-separated queries, each a word or a two-word phrase; the results
+  // of every query are pooled ("young man, lad" or "big, huge").
+  const groups = els.seedInput.value.toLowerCase()
+    .split(/[,;]+/)
+    .map((g) => g.split(/\s+/).map((s) => s.replace(/[^a-z'\-]/g, '')).filter(Boolean).slice(0, 2))
+    .filter((g) => g.length)
+    .slice(0, 6);
+  const seeds = groups.flat();
   const constraints = {};
   for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el ? el.value : '';
   constraints.stress = stressPat.join('');
@@ -193,7 +197,7 @@ function runFinder() {
   }));
   const empty = !seeds.length && !constraints.sl.length && !stressPat.length &&
     Object.values(constraints).every((v) => typeof v !== 'string' || !v.trim());
-  const results = empty ? [] : finder.search({ seeds, constraints });
+  const results = empty ? [] : finder.searchMulti(groups, constraints);
   renderFinderResults(results, els.finderResults, els.finderStatus, insertWord, { empty });
 
   // Definitions of the seed words, inline under the input.

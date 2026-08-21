@@ -821,6 +821,31 @@ export class Finder {
 
   // ---- main entry ----------------------------------------------------------
 
+  // Several comma-separated queries at once ("young man, lad" or "big, huge"):
+  // each group runs as its own search and the result lists are interleaved
+  // rank by rank, so every query is represented at the top.
+  searchMulti(groups, constraints = {}, limit = 120) {
+    if (groups.length <= 1) {
+      return this.search({ seeds: groups[0] ?? [], constraints, limit });
+    }
+    const lists = groups.map((seeds) => {
+      const label = seeds.join(' ');
+      const rs = this.search({ seeds, constraints, limit });
+      for (const r of rs) r.reasons = [`for “${label}”`, ...r.reasons];
+      return rs;
+    });
+    const merged = [];
+    const seen = new Set();
+    const longest = Math.max(...lists.map((l) => l.length));
+    for (let i = 0; i < longest; i++) {
+      for (const list of lists) {
+        const r = list[i];
+        if (r && !seen.has(r.word)) { seen.add(r.word); merged.push(r); }
+      }
+    }
+    return merged;
+  }
+
   search({ seeds = [], constraints = {}, limit = 120 }) {
     // Two words = phrase search: head + modifier ("young man", "ran quickly").
     if (seeds.length === 2) {
