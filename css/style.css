@@ -358,12 +358,6 @@ td.num { font-variant-numeric: tabular-nums; }
 .stress-builder button:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ---------- definition popup ---------- */
-.def-insert {
-  margin-top: 0.45rem; border: 1px solid var(--hairline); border-radius: 999px;
-  background: none; color: var(--accent); font: inherit; font-size: 0.82rem;
-  padding: 0.15rem 0.7rem; cursor: pointer;
-}
-.def-insert:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--page)); }
 .def-popup {
   position: absolute; z-index: 30;
   background: var(--surface); border: 1px solid var(--border);

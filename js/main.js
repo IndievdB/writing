@@ -231,9 +231,7 @@ function showPopup(chip, pin = false) {
   const defs = finder.definitionsFor(word.split(' ').pop());
   els.defPopup.innerHTML = `<b>${escText(word)}</b>` +
     (defs.length ? '<br>' + defs.map((d) => defLine(d)).join('<br>')
-      : '<br><span class="def-of">no definition found</span>') +
-    (pin ? '<br><button type="button" class="def-insert">↩ insert into sentence</button>' : '');
-  els.defPopup.querySelector('.def-insert')?.addEventListener('click', () => insertWord(word));
+      : '<br><span class="def-of">no definition found</span>');
   els.defPopup.hidden = false;
   const r = chip.getBoundingClientRect();
   const pw = Math.min(360, window.innerWidth - 24);
@@ -265,22 +263,6 @@ document.addEventListener('click', (e) => {
   if (popupPinned && !e.target.closest('.word-chip') && !e.target.closest('.def-popup')) hidePopup();
 });
 window.addEventListener('scroll', () => { if (!popupPinned) hidePopup(); }, { passive: true });
-
-// Insert a found word into the sentence at the cursor, with sane spacing.
-function insertWord(word) {
-  hidePopup();
-  const ta = els.input;
-  const pos = ta.selectionStart ?? ta.value.length;
-  const before = ta.value.slice(0, pos);
-  const after = ta.value.slice(ta.selectionEnd ?? pos);
-  const lead = before && !/[\s(\["'“‘\-—]$/.test(before) ? ' ' : '';
-  const trail = after && !/^[\s.,;:!?)\]"'”’\-—]/.test(after) ? ' ' : '';
-  ta.value = before + lead + word + trail + after;
-  const cursor = (before + lead + word).length;
-  ta.setSelectionRange(cursor, cursor);
-  ta.focus();
-  run();
-}
 
 let timer = null;
 const queueRun = () => { clearTimeout(timer); timer = setTimeout(run, 350); };
