@@ -406,6 +406,10 @@ td.num { font-variant-numeric: tabular-nums; }
 .word-chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--page)); }
 .chip-word { font-size: 0.98rem; }
 .chip-meta { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
+.chip-legend {
+  margin: 0.45rem 0 0; font-size: 0.76rem; color: var(--muted);
+}
+.chip-legend b { font-weight: 600; color: var(--ink-2); }
 .show-more {
   display: inline-flex; align-items: center;
   background: none; border: 1px dashed var(--hairline); border-radius: 999px;

@@ -11,6 +11,7 @@ const els = {
   rhythmStrip: $('rhythm-strip'),
   seedInput: $('seed-input'), finderStatus: $('finder-status'),
   finderResults: $('finder-results'), finderClear: $('finder-clear'),
+  chipLegend: $('chip-legend'),
   seedDef: $('seed-def'), slWord: $('c-slword'),
   slPhones: $('sl-phones'), defPopup: $('def-popup'),
   stressChips: $('stress-chips'), stressAdd: $('stress-add'),
@@ -200,6 +201,7 @@ function runFinder() {
     Object.values(constraints).every((v) => typeof v !== 'string' || !v.trim());
   const results = empty ? [] : finder.searchMulti(groups, constraints);
   renderFinderResults(results, els.finderResults, els.finderStatus, insertWord, { empty });
+  if (els.chipLegend) els.chipLegend.hidden = !results.length;
 
   // Definitions of the seed words, inline under the input.
   const defs = seeds.flatMap((s) => {
