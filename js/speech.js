@@ -93,15 +93,19 @@ export class NeuralTTS {
   constructor() {
     this.state = 'idle'; // idle | loading | ready | error
     this.tts = null;
+    this.dtype = null;   // quantization the loaded model uses ('q8' | 'q4')
     this.error = null;
     this.audioEl = null;
     this.cache = new Map(); // text|voice -> object URL (session-scoped)
   }
 
   // Download (or pull from browser cache) the model. onProgress(text).
-  async load(onProgress) {
-    if (this.state === 'ready' || this.state === 'loading') return;
+  // dtype picks the quantization: 'q8' (~90 MB, best) or 'q4' (~45 MB, light).
+  async load(onProgress, dtype = 'q8') {
+    if (this.state === 'loading') return;
+    if (this.state === 'ready' && this.dtype === dtype) return;
     this.state = 'loading';
+    this.tts = null;
     this.error = null;
     try {
       let mod = null, lastErr = null;
@@ -113,7 +117,7 @@ export class NeuralTTS {
       onProgress?.('downloading model (cached after first load)…');
       const seen = new Map();
       this.tts = await mod.KokoroTTS.from_pretrained(KOKORO_MODEL, {
-        dtype: 'q8',
+        dtype,
         device: 'wasm',
         progress_callback: (p) => {
           if (p.status === 'progress' && p.total) {
@@ -125,6 +129,9 @@ export class NeuralTTS {
         },
       });
       this.state = 'ready';
+      this.dtype = dtype;
+      for (const url of this.cache.values()) URL.revokeObjectURL(url);
+      this.cache.clear();
       onProgress?.(null);
     } catch (e) {
       this.state = 'error';

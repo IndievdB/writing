@@ -6,7 +6,7 @@
 <title>Word Study</title>
 <meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=17">
+<link rel="stylesheet" href="css/style.css?v=18">
 </head>
 <body>
 <header class="site-header">
@@ -85,10 +85,16 @@
   <section class="input-card">
     <label for="text-input" class="visually-hidden">Your sentence</label>
     <textarea id="text-input" rows="4" spellcheck="true"
-      placeholder="Build your sentence here — click a found word to insert it…"></textarea>
+      placeholder="Build your sentence here — insert words from the finder above…"></textarea>
     <div class="speech-row" role="group" aria-label="Read aloud">
       <button type="button" id="speak-btn" title="Read the sentence aloud">▶ Read aloud</button>
       <button type="button" id="stop-speak" title="Stop">■</button>
+      <label class="visually-hidden" for="model-select">Speech model</label>
+      <select id="model-select" title="Speech model — neural models download once and are cached in your browser for offline use">
+        <option value="sys">device voices</option>
+        <option value="k8">Kokoro neural — quality (~90 MB)</option>
+        <option value="k4">Kokoro neural — light (~45 MB)</option>
+      </select>
       <label class="visually-hidden" for="voice-select">Voice</label>
       <select id="voice-select"></select>
       <label class="visually-hidden" for="rate-select">Speed</label>
@@ -97,7 +103,6 @@
         <option value="1" selected>normal</option>
         <option value="1.2">fast</option>
       </select>
-      <button type="button" id="neural-load" title="Download a neural voice that runs in your browser and is cached for offline use">get neural voice (~90 MB, cached)</button>
       <span id="speech-status" class="status" role="status"></span>
     </div>
     <div class="input-row">
@@ -117,6 +122,6 @@
 
 </main>
 
-<script type="module" src="js/main.js?v=17"></script>
+<script type="module" src="js/main.js?v=18"></script>
 </body>
 </html>

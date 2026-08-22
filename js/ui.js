@@ -83,7 +83,7 @@ export function renderFinderResults(results, el, statusEl, onInsert, query) {
     statusEl.textContent = (visible.length < results.length
       ? `showing ${visible.length} of ${results.length} words`
       : `${results.length} word${results.length === 1 ? '' : 's'}`)
-      + ' — click one to insert it into your sentence at the cursor. Hover for details.';
+      + ' — click a word for its definition.';
     const frag = document.createDocumentFragment();
     for (const r of visible) {
       const chip = document.createElement('button');
@@ -98,7 +98,7 @@ export function renderFinderResults(results, el, statusEl, onInsert, query) {
       if (r.info.ety.origin !== 'neutral') bits.push(r.info.ety.origin);
       if (r.info.conc != null) bits.push(`concreteness ${(r.info.conc / 100).toFixed(1)}/5`);
       chip.title = bits.filter(Boolean).join('\n');
-      chip.addEventListener('click', () => onInsert(r.word));
+      chip.addEventListener('click', () => onInsert(r.word, chip));
       frag.appendChild(chip);
     }
     if (visible.length < results.length) {

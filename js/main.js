@@ -200,7 +200,7 @@ function runFinder() {
   const empty = !seeds.length && !constraints.sl.length && !stressPat.length &&
     Object.values(constraints).every((v) => typeof v !== 'string' || !v.trim());
   const results = empty ? [] : finder.searchMulti(groups, constraints);
-  renderFinderResults(results, els.finderResults, els.finderStatus, insertWord, { empty });
+  renderFinderResults(results, els.finderResults, els.finderStatus, pinPopup, { empty });
   if (els.chipLegend) els.chipLegend.hidden = !results.length;
 
   // Definitions of the seed words, inline under the input.
@@ -220,15 +220,20 @@ function defLine(d) {
   return `${tag}${escText(d.gloss)}${of}`;
 }
 
-// Definition popup on hover/click of a result chip.
+// Definition popup: hover previews it; clicking a chip pins it open with an
+// insert button (clicking a chip no longer inserts the word directly).
 let popupTimer = null;
-function showPopup(chip) {
+let popupPinned = null; // the chip the popup is pinned to, or null
+function showPopup(chip, pin = false) {
   const word = chip.dataset.word;
   if (!word) return;
+  popupPinned = pin ? chip : null;
   const defs = finder.definitionsFor(word.split(' ').pop());
   els.defPopup.innerHTML = `<b>${escText(word)}</b>` +
     (defs.length ? '<br>' + defs.map((d) => defLine(d)).join('<br>')
-      : '<br><span class="def-of">no definition found</span>');
+      : '<br><span class="def-of">no definition found</span>') +
+    (pin ? '<br><button type="button" class="def-insert">↩ insert into sentence</button>' : '');
+  els.defPopup.querySelector('.def-insert')?.addEventListener('click', () => insertWord(word));
   els.defPopup.hidden = false;
   const r = chip.getBoundingClientRect();
   const pw = Math.min(360, window.innerWidth - 24);
@@ -240,18 +245,26 @@ function showPopup(chip) {
 }
 function hidePopup() {
   clearTimeout(popupTimer);
+  popupPinned = null;
   els.defPopup.hidden = true;
+}
+function pinPopup(_word, chip) {
+  if (popupPinned === chip) { hidePopup(); return; } // click again to close
+  showPopup(chip, true);
 }
 els.finderResults?.addEventListener('mouseover', (e) => {
   const chip = e.target.closest('.word-chip');
-  if (!chip) return;
+  if (!chip || popupPinned) return;
   clearTimeout(popupTimer);
-  popupTimer = setTimeout(() => showPopup(chip), 220);
+  popupTimer = setTimeout(() => { if (!popupPinned) showPopup(chip); }, 220);
 });
 els.finderResults?.addEventListener('mouseout', (e) => {
-  if (e.target.closest('.word-chip')) hidePopup();
+  if (!popupPinned && e.target.closest('.word-chip')) hidePopup();
 });
-window.addEventListener('scroll', hidePopup, { passive: true });
+document.addEventListener('click', (e) => {
+  if (popupPinned && !e.target.closest('.word-chip') && !e.target.closest('.def-popup')) hidePopup();
+});
+window.addEventListener('scroll', () => { if (!popupPinned) hidePopup(); }, { passive: true });
 
 // Insert a found word into the sentence at the cursor, with sane spacing.
 function insertWord(word) {
@@ -348,42 +361,38 @@ els.finderClear?.addEventListener('click', () => {
 
 const sp = {
   speak: $('speak-btn'), stop: $('stop-speak'), voice: $('voice-select'),
-  rate: $('rate-select'), neural: $('neural-load'), status: $('speech-status'),
+  model: $('model-select'), rate: $('rate-select'), status: $('speech-status'),
 };
 const neuralTTS = new NeuralTTS();
 let speaking = false;
 
 function speechStatus(msg) { sp.status.textContent = msg ?? ''; }
 
+// The model select picks the engine (device voices, or a Kokoro build);
+// the voice select then lists that model's voices.
+const isNeuralModel = (m) => m === 'k8' || m === 'k4';
+
 async function populateVoices() {
-  const saved = localStorage.getItem('cadence-voice') ?? '';
+  const model = sp.model?.value ?? 'sys';
+  const saved = localStorage.getItem(`cadence-voice-${model}`) ?? '';
   sp.voice.innerHTML = '';
-  if (systemAvailable()) {
+  if (isNeuralModel(model)) {
+    for (const [id, label] of NEURAL_VOICES) {
+      const o = document.createElement('option');
+      o.value = id;
+      o.textContent = label;
+      sp.voice.appendChild(o);
+    }
+  } else if (systemAvailable()) {
     const voices = await listSystemVoices();
     const en = voices.filter((v) => v.lang?.toLowerCase().startsWith('en'));
     const list = en.length ? en : voices;
-    if (list.length) {
-      const og = document.createElement('optgroup');
-      og.label = 'System voices';
-      for (const v of list.slice(0, 30)) {
-        const o = document.createElement('option');
-        o.value = `sys:${v.voiceURI}`;
-        o.textContent = v.name;
-        og.appendChild(o);
-      }
-      sp.voice.appendChild(og);
-    }
-  }
-  if (neuralTTS.state === 'ready') {
-    const og = document.createElement('optgroup');
-    og.label = 'Neural (offline, cached)';
-    for (const [id, label] of NEURAL_VOICES) {
+    for (const v of list.slice(0, 30)) {
       const o = document.createElement('option');
-      o.value = `neu:${id}`;
-      o.textContent = label;
-      og.appendChild(o);
+      o.value = v.voiceURI;
+      o.textContent = v.name;
+      sp.voice.appendChild(o);
     }
-    sp.voice.appendChild(og);
   }
   if (!sp.voice.options.length) {
     const o = document.createElement('option');
@@ -391,24 +400,28 @@ async function populateVoices() {
     sp.voice.appendChild(o);
   }
   if (saved && [...sp.voice.options].some((o) => o.value === saved)) sp.voice.value = saved;
-  else if (neuralTTS.state === 'ready') sp.voice.value = `neu:${NEURAL_VOICES[0][0]}`;
 }
 
-async function loadNeural() {
-  sp.neural.disabled = true;
-  try {
-    await neuralTTS.load(speechStatus);
-    localStorage.setItem('cadence-neural', '1');
-    sp.neural.classList.add('hidden');
-    await populateVoices();
-    speechStatus('neural voice ready — cached for offline use');
-    setTimeout(() => speechStatus(''), 4000);
-  } catch (e) {
-    speechStatus(`neural voice failed to load (${e?.message ?? e}) — system voices still work`);
-    sp.neural.disabled = false;
+async function applyModel() {
+  const model = sp.model?.value ?? 'sys';
+  localStorage.setItem('cadence-model', model);
+  await populateVoices();
+  if (isNeuralModel(model)) {
+    const dtype = model === 'k4' ? 'q4' : 'q8';
+    if (neuralTTS.state === 'ready' && neuralTTS.dtype === dtype) return;
+    try {
+      await neuralTTS.load(speechStatus, dtype);
+      speechStatus('neural model ready — cached for offline use');
+      setTimeout(() => speechStatus(''), 4000);
+    } catch (e) {
+      speechStatus(`neural model failed to load (${e?.message ?? e}) — device voices still work`);
+      sp.model.value = 'sys';
+      localStorage.setItem('cadence-model', 'sys');
+      await populateVoices();
+    }
   }
 }
-sp.neural?.addEventListener('click', loadNeural);
+sp.model?.addEventListener('change', applyModel);
 
 function stopSpeaking() {
   stopSystem();
@@ -420,30 +433,36 @@ async function speakText(text) {
   if (!text.trim()) return;
   stopSpeaking();
   const rate = Number(sp.rate.value) || 1;
-  const choice = sp.voice.value;
   const done = () => { speaking = false; };
   speaking = true;
-  if (choice.startsWith('neu:')) {
+  if (isNeuralModel(sp.model?.value)) {
     try {
+      if (neuralTTS.state !== 'ready') await applyModel();
       speechStatus('synthesizing…');
-      await neuralTTS.speak(text, choice.slice(4), done);
+      await neuralTTS.speak(text, sp.voice.value || NEURAL_VOICES[0][0], done);
       speechStatus('');
     } catch (e) {
       speechStatus(`synthesis failed (${e?.message ?? e})`);
       done();
     }
   } else {
-    speakSystem(text, { voiceURI: choice.slice(4) || null, rate }, null, done);
+    speakSystem(text, { voiceURI: sp.voice.value || null, rate }, null, done);
   }
 }
 
 sp.speak?.addEventListener('click', () => speakText(els.input.value));
 sp.stop?.addEventListener('click', stopSpeaking);
-sp.voice?.addEventListener('change', () => localStorage.setItem('cadence-voice', sp.voice.value));
+sp.voice?.addEventListener('change', () =>
+  localStorage.setItem(`cadence-voice-${sp.model?.value ?? 'sys'}`, sp.voice.value));
 
-populateVoices();
-if (localStorage.getItem('cadence-neural') === '1') loadNeural();
-else if (!systemAvailable()) speechStatus('no system voices in this browser — load the neural voice to read aloud');
+// Restore the chosen model (legacy 'cadence-neural' flag maps to quality).
+const savedModel = localStorage.getItem('cadence-model')
+  ?? (localStorage.getItem('cadence-neural') === '1' ? 'k8' : 'sys');
+if (sp.model && [...sp.model.options].some((o) => o.value === savedModel)) sp.model.value = savedModel;
+applyModel();
+if (savedModel === 'sys' && !systemAvailable()) {
+  speechStatus('no device voices in this browser — pick a neural model to read aloud');
+}
 
 // Theme toggle: auto -> explicit dark -> explicit light.
 const root = document.documentElement;
