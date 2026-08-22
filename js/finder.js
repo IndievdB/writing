@@ -593,8 +593,11 @@ export class Finder {
         // "x"/"?" = any stress for that syllable. Exact mode needs the same
         // syllable count; prefix mode ("starts with") just needs enough.
         const prefix = c.stressMode === 'prefix';
-        tests.push((p) => {
+        tests.push((p, surface) => {
           const st = (p.dictStresses ?? p.stresses).map((s) => (s >= 1 ? '1' : '0'));
+          // One-syllable function words ("the", "him") carry dictionary
+          // stress marks but are unstressed in running speech.
+          if (st.length === 1 && surface && FUNCTION_WORDS.has(surface)) st[0] = '0';
           if (prefix ? st.length < pat.length : st.length !== pat.length) return false;
           for (let i = 0; i < pat.length; i++) {
             if (pat[i] !== 'x' && pat[i] !== '?' && pat[i] !== st[i]) return false;
@@ -871,6 +874,7 @@ export class Finder {
 
     const { tests, soft } = this.compileConstraints(constraints);
     const hasConstraints = tests.length > 0 || soft.length > 0;
+    const seedless = !seeds.length;
     const results = [];
 
     const consider = (word, base) => {
@@ -888,8 +892,11 @@ export class Finder {
         let score = base.score;
         for (const s of soft) score += s(p) * 0.8;
         // Prefer common words a little (log-scaled), unless the user asked
-        // rare. Inflected surfaces score by their lemma's frequency.
-        const rank = info.freqRank ?? this.lex.freqRank(word) ?? 200000;
+        // rare. Inflected surfaces score by their lemma's frequency — except
+        // in seedless sweeps, where the surface's own rank is the honest one
+        // ("yous" must not borrow rank 1 from "you").
+        const rank = (seedless ? this.lex.freq.get(surface) : null)
+          ?? info.freqRank ?? this.lex.freqRank(word) ?? 200000;
         if (constraints.rarity === 'rare') {
           if (rank < 8000) continue;
           score += Math.log10(rank) * 0.1;
@@ -910,10 +917,10 @@ export class Finder {
     } else {
       if (!hasConstraints && !constraints.origin && !constraints.feel && !constraints.rarity) return [];
       // Seedless: sweep the frequency-ordered pool under the constraints.
+      // Function words stay in — a syllable/stress query should offer
+      // "a", "the", "him" just like any content word.
       if (!this.pool) {
-        this.pool = [...this.lex.freq.keys()].filter(
-          (w) => !FUNCTION_WORDS.has(w) && this.lex.phones.has(w),
-        );
+        this.pool = [...this.lex.freq.keys()].filter((w) => this.lex.phones.has(w));
       }
       const cap = limit * 3; // bound the sweep; matches beyond this are ever-rarer words
       for (const w of this.pool) {
