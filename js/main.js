@@ -215,17 +215,20 @@ function runFinder() {
 
   // Definitions of the seed words, inline under the input — and spelling
   // suggestions for anything the dictionaries don't know.
-  const defs = seeds.flatMap((s) => {
-    const d = finder.definitionsFor(s, seeds.length > 1 ? 2 : 4);
-    return d.map((x) => ({ ...x, of: seeds.length > 1 ? s : x.of }));
-  });
-  const lines = defs.map((d) => defLine(d));
+  const lines = [];
   for (const w of [...new Set(seeds)]) {
-    if (w.length < 2 || finder.isKnownWord(w)) continue;
-    const sugs = finder.spellSuggestions(w);
-    lines.push(`<span class="spell-note">“${escText(w)}” isn’t a word we know${sugs.length ? ' — did you mean' : ''}</span>` +
-      sugs.map((s) => ` <button type="button" class="spell-sug" data-bad="${escText(w)}" data-good="${escText(s)}">${escText(s)}</button>`).join('') +
-      (sugs.length ? '<span class="spell-note">?</span>' : ''));
+    if (w.length < 2) continue;
+    if (!finder.isKnownWord(w)) {
+      const sugs = finder.spellSuggestions(w);
+      lines.push(`<span class="spell-note">“${escText(w)}” isn’t a word we know${sugs.length ? ' — did you mean' : ''}</span>` +
+        sugs.map((s) => ` <button type="button" class="spell-sug" data-bad="${escText(w)}" data-good="${escText(s)}">${escText(s)}</button>`).join('') +
+        (sugs.length ? '<span class="spell-note">?</span>' : ''));
+      continue;
+    }
+    const defs = finder.definitionsFor(w, seeds.length > 1 ? 2 : 4);
+    const meta = wordMeta(w);
+    if (meta || defs.length) lines.push(`<b>${escText(w)}</b>${meta}`);
+    for (const d of defs) lines.push(defLine(d));
   }
   els.seedDef.hidden = !lines.length;
   els.seedDef.innerHTML = lines.join('<br>');
@@ -240,6 +243,18 @@ function runFinder() {
 
 const POS_FULL = { N: 'noun', V: 'verb', J: 'adj.', R: 'adv.', '': '' };
 const escText = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Stress marks and origin for a word, shown beside its definitions.
+function wordMeta(word) {
+  const info = finder.info(word);
+  if (!info) return '';
+  const marks = (info.phon.dictStresses ?? info.phon.stresses ?? [])
+    .map((s) => (s >= 1 ? '´' : '˘')).join('');
+  const origin = info.ety.origin === 'germanic' ? 'Anglo-Saxon'
+    : info.ety.origin === 'latinate' ? 'Latinate' : '';
+  const bits = [marks, origin].filter(Boolean);
+  return bits.length ? ` <span class="def-meta">${bits.join(' · ')}</span>` : '';
+}
 function defLine(d) {
   const tag = d.pos ? `<i>${POS_FULL[d.pos] ?? ''}</i> ` : '';
   const of = d.of ? ` <span class="def-of">(${escText(d.of)})</span>` : '';
@@ -255,7 +270,7 @@ function showPopup(chip, pin = false) {
   if (!word) return;
   popupPinned = pin ? chip : null;
   const defs = finder.definitionsFor(word.split(' ').pop());
-  els.defPopup.innerHTML = `<b>${escText(word)}</b>` +
+  els.defPopup.innerHTML = `<b>${escText(word)}</b>${wordMeta(word)}` +
     (defs.length ? '<br>' + defs.map((d) => defLine(d)).join('<br>')
       : '<br><span class="def-of">no definition found</span>');
   els.defPopup.hidden = false;

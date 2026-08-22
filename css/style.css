@@ -419,6 +419,7 @@ td.num { font-variant-numeric: tabular-nums; }
 .chip-word { font-size: 0.98rem; }
 .chip-meta { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
 .spell-note { color: var(--muted); }
+.def-meta { color: var(--muted); font-size: 0.85em; letter-spacing: 0.06em; }
 .spell-sug {
   border: 1px solid var(--hairline); border-radius: 999px; background: none;
   color: var(--accent); font: inherit; font-size: 0.85rem;
