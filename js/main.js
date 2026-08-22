@@ -60,12 +60,26 @@ async function loadData() {
   }
 }
 
+// Per-syllable stress overrides for the rhythm strip and tapping:
+// "si:k" -> '1' | '0' | 'skip'. Reset whenever the sentence text changes.
+let stressOverrides = new Map();
+let overriddenText = '';
+
+function toggleStress(key) {
+  const cur = stressOverrides.get(key);
+  const next = cur === undefined ? '1' : cur === '1' ? '0' : cur === '0' ? 'skip' : undefined;
+  if (next === undefined) stressOverrides.delete(key);
+  else stressOverrides.set(key, next);
+  run();
+}
+
 function run() {
   if (!lexicon.ready) return;
   const text = els.input.value;
   if (!text.trim()) { els.results.hidden = true; return; }
+  if (text !== overriddenText) { stressOverrides.clear(); overriddenText = text; }
   lastResult = analyzeText(text, lexicon);
-  renderResults(lastResult, els);
+  renderResults(lastResult, els, { overrides: stressOverrides, onToggle: toggleStress });
   els.results.hidden = false;
   saveHash();
 }
@@ -452,6 +466,7 @@ function tapStresses() {
   const ctx = tapCtx;
   if (ctx.state === 'suspended') ctx.resume();
   let t = ctx.currentTime + 0.1;
+  const beat = Number($('tap-speed')?.value) || 0.24;
   const hit = (time, stress) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -467,14 +482,16 @@ function tapStresses() {
     osc.stop(time + 0.22);
     tapNodes.push(osc);
   };
-  for (const s of lastResult.sentences) {
-    for (const syl of s.sylls) {
-      hit(t, syl.stress);
-      t += 0.24;
-      if (syl.pauseAfter) t += 0.26;
-    }
-    t += 0.4;
-  }
+  lastResult.sentences.forEach((s, si) => {
+    s.sylls.forEach((syl, k) => {
+      const ov = stressOverrides.get(`${si}:${k}`);
+      if (ov === 'skip') return; // elided syllable: no beat, no time slot
+      hit(t, ov === '1' ? 1 : ov === '0' ? 0 : syl.stress);
+      t += beat;
+      if (syl.pauseAfter) t += beat + 0.05;
+    });
+    t += beat * 1.6;
+  });
 }
 
 async function speakText(text) {

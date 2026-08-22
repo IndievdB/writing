@@ -6,7 +6,7 @@
 <title>Word Study</title>
 <meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=24">
+<link rel="stylesheet" href="css/style.css?v=25">
 </head>
 <body>
 <header class="site-header">
@@ -90,7 +90,6 @@
       placeholder="Build your sentence here…"></textarea>
     <div class="speech-row" role="group" aria-label="Read aloud">
       <button type="button" id="speak-btn" title="Read the sentence aloud">▶ Read aloud</button>
-      <button type="button" id="tap-btn" title="Tap out the sentence's stress pattern as percussion — loud beat = stressed, soft tick = unstressed">🥁 Tap stresses</button>
       <button type="button" id="stop-speak" title="Stop">■</button>
       <label class="visually-hidden" for="model-select">Speech model</label>
       <select id="model-select" title="Speech model — neural models download once and are cached in your browser for offline use">
@@ -118,7 +117,17 @@
     <div class="panel">
       <h2>Rhythm</h2>
       <p class="panel-hint">One block per syllable — tall = stressed, short = unstressed.
-        Red bars are two stresses next to each other.</p>
+        Red bars are two stresses next to each other.
+        Click a block to override it: stressed → unstressed → skip → auto.</p>
+      <div class="rhythm-controls">
+        <button type="button" id="tap-btn" title="Tap out the stress pattern as percussion — loud beat = stressed, soft tick = unstressed">🥁 Tap stresses</button>
+        <label class="visually-hidden" for="tap-speed">Tap speed</label>
+        <select id="tap-speed">
+          <option value="0.36">slow</option>
+          <option value="0.24" selected>normal</option>
+          <option value="0.17">fast</option>
+        </select>
+      </div>
       <div id="rhythm-strip"></div>
     </div>
 
@@ -126,6 +135,6 @@
 
 </main>
 
-<script type="module" src="js/main.js?v=24"></script>
+<script type="module" src="js/main.js?v=25"></script>
 </body>
 </html>

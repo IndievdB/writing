@@ -2,15 +2,18 @@
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-export function renderResults(result, els) {
-  renderRhythm(result, els.rhythmStrip);
+export function renderResults(result, els, rhythmOpts) {
+  renderRhythm(result, els.rhythmStrip, rhythmOpts);
 }
 
 // ---------------------------------------------------------------------------
 
-function renderRhythm(result, container) {
+const OVERRIDE_NAMES = { 1: 'stressed (override)', 0: 'unstressed (override)', skip: 'skipped — not tapped' };
+
+function renderRhythm(result, container, { overrides = null, onToggle = null } = {}) {
   container.innerHTML = '';
-  for (const s of result.sentences) {
+  result.sentences.forEach((s, si) => {
+    const idxOf = new Map(s.sylls.map((x, i) => [x, i]));
     const clashSet = new Set();
     for (const [wa, wb] of s.marks.clashes) {
       clashSet.add(`${wa}:last`);
@@ -33,7 +36,12 @@ function renderRhythm(result, container) {
       blocks.className = 'blocks';
       sylls.forEach((syl, k) => {
         const b = document.createElement('span');
-        b.className = `syll s${syl.stress}`;
+        const key = `${si}:${idxOf.get(syl)}`;
+        const ov = overrides?.get(key);
+        const eff = ov === '1' ? 1 : ov === '0' ? 0 : syl.stress;
+        b.className = `syll s${eff}`;
+        if (ov === 'skip') b.classList.add('skip');
+        else if (ov !== undefined) b.classList.add('ovr');
         const pos = k === 0 ? 'first' : k === sylls.length - 1 ? 'last' : '';
         if (pos && clashSet.has(`${wi}:${pos}`)) {
           // Also handle single-syllable words being both first and last.
@@ -42,7 +50,11 @@ function renderRhythm(result, container) {
         if (sylls.length === 1 && (clashSet.has(`${wi}:first`) || clashSet.has(`${wi}:last`))) {
           b.classList.add('clash');
         }
-        b.title = `${a.token.value} — ${syl.stress === 1 ? 'primary stress' : syl.stress === 2 ? 'secondary stress' : 'unstressed'}`;
+        const state = ov !== undefined ? OVERRIDE_NAMES[ov]
+          : syl.stress === 1 ? 'primary stress' : syl.stress === 2 ? 'secondary stress' : 'unstressed';
+        b.title = `${a.token.value} — ${state}` +
+          (onToggle ? '\nclick to override: stressed → unstressed → skip → auto' : '');
+        if (onToggle) b.addEventListener('click', () => onToggle(key));
         blocks.appendChild(b);
       });
       const label = document.createElement('div');
@@ -62,7 +74,7 @@ function renderRhythm(result, container) {
     wrap.className = 'rhythm-sentence';
     wrap.appendChild(line);
     container.appendChild(wrap);
-  }
+  });
 }
 
 // ---------------------------------------------------------------------------

@@ -171,11 +171,23 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-c
 .rhythm-line { display: flex; align-items: flex-end; gap: 2px; min-height: 46px; width: max-content; }
 .syll {
   width: 9px; border-radius: 3px 3px 0 0; background: var(--accent-mid);
-  height: 12px; flex: none;
+  height: 12px; flex: none; cursor: pointer;
 }
 .syll.s1 { height: 34px; background: var(--accent); }
 .syll.s2 { height: 24px; background: var(--accent); }
 .syll.clash { background: var(--critical); }
+.syll.ovr { box-shadow: 0 0 0 1.5px var(--ink-2); }
+.syll.skip {
+  height: 6px; background: transparent;
+  border: 1px dashed var(--muted); border-radius: 3px;
+}
+.rhythm-controls { display: flex; align-items: center; gap: 0.5rem; margin: 0.2rem 0 0.6rem; }
+.rhythm-controls button, .rhythm-controls select {
+  border: 1px solid var(--hairline); border-radius: 8px; background: var(--page);
+  color: var(--ink); font: inherit; font-size: 0.85rem;
+  padding: 0.25rem 0.7rem; cursor: pointer;
+}
+.rhythm-controls button:hover { border-color: var(--accent); color: var(--accent); }
 .word-gap { width: 7px; flex: none; }
 .pause-gap {
   width: 18px; flex: none; align-self: flex-end;
