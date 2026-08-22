@@ -80,6 +80,16 @@ check('happy + starts with DUM-da: prefix matches', prefix.length > 0 && prefix.
 check('prefix mode includes longer words', prefix.some((r) => r.info.phon.syllableCount > 2),
   words(prefix.filter((r) => r.info.phon.syllableCount > 2)).slice(0, 4).join(','));
 
+// Monosyllable prosody: clitics unstressed, beats stressed, dual in both.
+const un1 = finder.search({ constraints: { syll: '1', stress: '0' } });
+const st1 = finder.search({ constraints: { syll: '1', stress: '1' } });
+const un1w = new Set(words(un1)), st1w = new Set(words(st1));
+check('clitics (the/him/of) only in unstressed', ['the', 'him', 'of', 'is'].every((w) => un1w.has(w) && !st1w.has(w)),
+  words(un1).slice(0, 8).join(','));
+check('beat words (this/no/not) only in stressed', ['this', 'no', 'not'].every((w) => st1w.has(w) && !un1w.has(w)),
+  words(st1).slice(0, 8).join(','));
+check('dual words (that/some/what) in both', ['that', 'some', 'what'].every((w) => un1w.has(w) && st1w.has(w)));
+
 // Rhyme, seedless.
 const rhyme = finder.search({ constraints: { rhyme: 'light' } });
 check('rhymes with light', words(rhyme).length >= 5 && words(rhyme).every((w) => w !== 'light'),

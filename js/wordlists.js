@@ -19,6 +19,28 @@ not there here then also too very just only even still both all most many
 much few little more less own same such
 `.trim().split(/\s+/));
 
+// Prosody of one-syllable closed-class words, for the stress filter.
+// Clitics lean on the next word and are unstressed in running speech,
+// whatever their dictionary stress digit says.
+export const UNSTRESSED_MONOSYLLABLES = new Set(`
+a an the and but or nor as than per if
+of to in on at by for from with
+am is are was were be been do does did has have had
+will would shall should can could may might must
+i you he she it we they me him her us them
+my your his its our their
+`.trim().split(/\s+/));
+
+// Words that take either stress depending on use — "THAT dog" vs "I know
+// that…", "SOME people" vs "some tea" — match stressed and unstressed alike.
+// (Demonstratives this/these/those and negatives no/not keep their
+// dictionary stress: they carry a beat.)
+export const DUAL_STRESS_MONOSYLLABLES = new Set(`
+that some there what who whom whose which
+all both each most more less much still just too so yet
+when where while since once through near
+`.trim().split(/\s+/));
+
 export const COORDINATORS = new Set(['and', 'but', 'or', 'nor', 'so', 'yet', 'for']);
 
 export const SUBORDINATORS = new Set(`

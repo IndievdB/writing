@@ -4,7 +4,7 @@
 import { analyzeWord } from './phonology.js';
 import { VOWELS } from './lexicon.js';
 import { classifyOrigin } from './etymology.js';
-import { FUNCTION_WORDS, IRREGULAR_PAST } from './wordlists.js';
+import { FUNCTION_WORDS, IRREGULAR_PAST, UNSTRESSED_MONOSYLLABLES, DUAL_STRESS_MONOSYLLABLES } from './wordlists.js';
 
 // Stopwords for the definition-text index (function words + defining
 // vocabulary that appears in half of all glosses).
@@ -595,11 +595,16 @@ export class Finder {
         const prefix = c.stressMode === 'prefix';
         tests.push((p, surface) => {
           const st = (p.dictStresses ?? p.stresses).map((s) => (s >= 1 ? '1' : '0'));
-          // One-syllable function words ("the", "him") carry dictionary
-          // stress marks but are unstressed in running speech.
-          if (st.length === 1 && surface && FUNCTION_WORDS.has(surface)) st[0] = '0';
+          // Prosody beats dictionary digits for one-syllable closed-class
+          // words: clitics ("the", "him") are unstressed in running speech,
+          // and dual-use words ("that", "some") match either pattern.
+          if (st.length === 1 && surface) {
+            if (UNSTRESSED_MONOSYLLABLES.has(surface)) st[0] = '0';
+            else if (DUAL_STRESS_MONOSYLLABLES.has(surface)) st[0] = '*';
+          }
           if (prefix ? st.length < pat.length : st.length !== pat.length) return false;
           for (let i = 0; i < pat.length; i++) {
+            if (st[i] === '*') continue;
             if (pat[i] !== 'x' && pat[i] !== '?' && pat[i] !== st[i]) return false;
           }
           return true;
