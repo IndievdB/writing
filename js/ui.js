@@ -95,7 +95,9 @@ export function renderFinderResults(results, el, statusEl, onInsert, query) {
       chip.innerHTML = `<span class="chip-word">${esc(r.word)}</span><span class="chip-meta">${stress}</span>`;
       const bits = [r.info.phon.rawPhones?.join(' ')];
       if (r.reasons.length) bits.push(r.reasons.join('; '));
-      if (r.info.ety.origin !== 'neutral') bits.push(r.info.ety.origin);
+      if (r.info.ety.origin !== 'neutral') {
+        bits.push(r.info.ety.origin === 'germanic' ? 'anglo-saxon' : r.info.ety.origin);
+      }
       if (r.info.conc != null) bits.push(`concreteness ${(r.info.conc / 100).toFixed(1)}/5`);
       chip.title = bits.filter(Boolean).join('\n');
       chip.addEventListener('click', () => onInsert(r.word, chip));

@@ -96,6 +96,7 @@ love above glove shove dove oven cover
 knowledge acknowledge
 listen hasten fasten christen glisten
 bird word work worth worse worst
+caregiver wunderkind kindergarten
 `.trim().split(/\s+/));
 
 // Unambiguously Latinate/Romance high-frequency words that lack the telltale

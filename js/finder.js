@@ -852,6 +852,7 @@ export class Finder {
     const results = [];
     for (const [w, c] of cands) {
       if (!this.posCap(w).includes(wantPos)) continue;
+      if (constraints.type && !this.posCap(w).includes(constraints.type)) continue;
       const surfaces = kind ? this.inflectFor(w, kind) : [w];
       if (!surfaces) continue;
       for (const surface of surfaces) {
@@ -859,9 +860,15 @@ export class Finder {
         const info = this.info(surface);
         if (!info) continue;
         if (!tests.every((t) => t(info.phon, surface))) continue;
+        // Origin/feel/rarity apply to phrase results the same as everywhere.
+        const rank = info.freqRank ?? this.lex.freqRank(w) ?? 200000;
+        if (constraints.rarity === 'rare' && rank < 8000) continue;
+        if (constraints.rarity === 'common' && rank > 5000) continue;
+        if (constraints.origin && info.ety.origin !== constraints.origin) continue;
+        if (constraints.feel === 'concrete' && !(info.conc >= 350)) continue;
+        if (constraints.feel === 'abstract' && !(info.conc != null && info.conc <= 260)) continue;
         let score = c.score;
         for (const s of soft) score += s(info.phon) * 0.8;
-        const rank = info.freqRank ?? this.lex.freqRank(w) ?? 200000;
         score += (5.4 - Math.log10(rank)) * 0.1;
         results.push({ word: surface, score, info, reasons: [c.reason] });
       }
