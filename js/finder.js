@@ -655,7 +655,7 @@ export class Finder {
     return this._agentNouns;
   }
 
-  searchPhrase(a, b, constraints = {}, limit = 120) {
+  searchPhrase(a, b, constraints = {}, limit = 2000) {
     const { head, mod, wantPos } = this.phraseRoles(a, b);
     const d = this.detectInflection(head);
     let headLemma = d?.lemma ?? head;
@@ -830,7 +830,7 @@ export class Finder {
   // Several comma-separated queries at once ("young man, lad" or "big, huge"):
   // each group runs as its own search and the result lists are interleaved
   // rank by rank, so every query is represented at the top.
-  searchMulti(groups, constraints = {}, limit = 120) {
+  searchMulti(groups, constraints = {}, limit = 2000) {
     if (groups.length <= 1) {
       return this.search({ seeds: groups[0] ?? [], constraints, limit });
     }
@@ -852,7 +852,7 @@ export class Finder {
     return merged;
   }
 
-  search({ seeds = [], constraints = {}, limit = 120 }) {
+  search({ seeds = [], constraints = {}, limit = 2000 }) {
     // Two words = phrase search: head + modifier ("young man", "ran quickly").
     if (seeds.length === 2) {
       return this.searchPhrase(seeds[0], seeds[1], constraints, limit);
@@ -915,7 +915,7 @@ export class Finder {
           (w) => !FUNCTION_WORDS.has(w) && this.lex.phones.has(w),
         );
       }
-      const cap = limit * 6;
+      const cap = limit * 3; // bound the sweep; matches beyond this are ever-rarer words
       for (const w of this.pool) {
         consider(w, { score: 0, reasons: [] });
         if (results.length >= cap) break;
