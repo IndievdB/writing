@@ -244,7 +244,7 @@ export class Finder {
   // recognizable inflection of one of those.
   isKnownWord(w) {
     return this.defs.has(w) || this.curated.has(w) || this.byWord.has(w) ||
-      this.lex.phones.has(w) || this.lex.freq.has(w) || !!this.detectInflection(w);
+      (this.lex.phones.has(w) && this.lex.freq.has(w)) || !!this.detectInflection(w);
   }
 
   // "Did you mean" candidates for a non-word: dictionary words within edit
