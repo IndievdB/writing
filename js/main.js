@@ -315,8 +315,8 @@ els.stressAdd?.addEventListener('click', () => {
   queueFinder();
 });
 els.stressClear?.addEventListener('click', () => {
-  stressPat = [];
-  stressMode = 'exact';
+  stressPat.pop();
+  if (!stressPat.length) stressMode = 'exact';
   renderStressChips();
   queueFinder();
 });
