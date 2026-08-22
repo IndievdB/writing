@@ -127,7 +127,7 @@ function rebuildSlChips() {
   if (!words.length) return;
   const hint = document.createElement('div');
   hint.className = 'sl-hint';
-  hint.textContent = 'tap a sound: once = anywhere • twice = at the start ▸ • three times = at the end ◂';
+  hint.textContent = 'tap sounds the results must contain — use “Alliterates with” for opening sounds';
   els.slPhones.appendChild(hint);
   for (const w of words) {
     const block = document.createElement('div');
