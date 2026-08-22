@@ -590,10 +590,16 @@ export class Finder {
     if (c.stress?.trim()) {
       const pat = c.stress.trim().replace(/[´ˈ]/g, '1').replace(/[˘ˌ]/g, '0').replace(/[^10x?]/gi, '');
       if (pat) {
+        // "x"/"?" = any stress for that syllable. Exact mode needs the same
+        // syllable count; prefix mode ("starts with") just needs enough.
+        const prefix = c.stressMode === 'prefix';
         tests.push((p) => {
           const st = (p.dictStresses ?? p.stresses).map((s) => (s >= 1 ? '1' : '0'));
-          if (st.length !== pat.length) return false;
-          return st.every((s, i) => pat[i] === 'x' || pat[i] === '?' || pat[i] === s);
+          if (prefix ? st.length < pat.length : st.length !== pat.length) return false;
+          for (let i = 0; i < pat.length; i++) {
+            if (pat[i] !== 'x' && pat[i] !== '?' && pat[i] !== st[i]) return false;
+          }
+          return true;
         });
       }
     }

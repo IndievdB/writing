@@ -351,9 +351,14 @@ td.num { font-variant-numeric: tabular-nums; }
 }
 .stress-chip.st-1 { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .stress-chip.st-0 { color: var(--ink-2); }
+.stress-chip.st-x { border-style: dashed; color: var(--muted); font-style: italic; }
 .stress-builder button#stress-add, .stress-builder button#stress-clear {
   border: 1px dashed var(--hairline); border-radius: 6px; background: none;
   color: var(--muted); font-size: 0.78rem; padding: 0.1rem 0.45rem; cursor: pointer;
+}
+.stress-builder button#stress-mode {
+  border: 1px solid var(--hairline); border-radius: 6px; background: var(--surface);
+  color: var(--ink-2); font-size: 0.72rem; padding: 0.1rem 0.4rem; cursor: pointer;
 }
 .stress-builder button:hover { border-color: var(--accent); color: var(--accent); }
 

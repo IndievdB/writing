@@ -14,7 +14,7 @@ const els = {
   seedDef: $('seed-def'), slWord: $('c-slword'),
   slPhones: $('sl-phones'), defPopup: $('def-popup'),
   stressChips: $('stress-chips'), stressAdd: $('stress-add'),
-  stressClear: $('stress-clear'),
+  stressClear: $('stress-clear'), stressMode: $('stress-mode'),
 };
 const constraintEls = {
   rhyme: $('c-rhyme'), syll: $('c-syll'),
@@ -189,6 +189,7 @@ function runFinder() {
   const constraints = {};
   for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el ? el.value : '';
   constraints.stress = stressPat.join('');
+  constraints.stressMode = stressPat.length ? stressMode : '';
   constraints.sl = slState.map((st) => ({
     word: st.word,
     grouped: st.grouped,
@@ -276,23 +277,34 @@ els.seedInput?.addEventListener('input', queueFinder);
 els.slWord?.addEventListener('input', () => { rebuildSlChips(); queueFinder(); });
 
 // Stress-pattern builder: visual DUM/da chips instead of 1/0 notation.
-let stressPat = []; // e.g. ['1','0'] = DUM-da
+// Each chip cycles stressed -> unstressed -> any; the mode button switches
+// between "exactly this pattern" and "starts with this pattern".
+let stressPat = []; // e.g. ['1','0'] = DUM-da; 'x' = any
+let stressMode = 'exact'; // 'exact' | 'prefix'
+const STRESS_NEXT = { 1: '0', 0: 'x', x: '1' };
+const STRESS_LABEL = { 1: 'DUM', 0: 'da', x: 'any' };
+const STRESS_NAME = { 1: 'stressed', 0: 'unstressed', x: 'any stress' };
 function renderStressChips() {
   els.stressChips.innerHTML = '';
   stressPat.forEach((s, i) => {
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = `stress-chip ${s === '1' ? 'st-1' : 'st-0'}`;
-    b.textContent = s === '1' ? 'DUM' : 'da';
-    b.title = `Syllable ${i + 1}: ${s === '1' ? 'stressed' : 'unstressed'} — click to flip`;
+    b.className = `stress-chip st-${s}`;
+    b.textContent = STRESS_LABEL[s];
+    b.title = `Syllable ${i + 1}: ${STRESS_NAME[s]} — click to cycle`;
     b.addEventListener('click', () => {
-      stressPat[i] = stressPat[i] === '1' ? '0' : '1';
+      stressPat[i] = STRESS_NEXT[stressPat[i]];
       renderStressChips();
       queueFinder();
     });
     els.stressChips.appendChild(b);
   });
   els.stressClear.hidden = !stressPat.length;
+  els.stressMode.hidden = !stressPat.length;
+  els.stressMode.textContent = stressMode === 'exact' ? 'exactly' : 'starts with';
+  els.stressMode.title = stressMode === 'exact'
+    ? 'Words with exactly this pattern — click for “starts with”'
+    : 'Words whose first syllables match this pattern — click for “exactly”';
   els.stressAdd.textContent = stressPat.length ? '+' : '+ syllable';
 }
 els.stressAdd?.addEventListener('click', () => {
@@ -304,6 +316,12 @@ els.stressAdd?.addEventListener('click', () => {
 });
 els.stressClear?.addEventListener('click', () => {
   stressPat = [];
+  stressMode = 'exact';
+  renderStressChips();
+  queueFinder();
+});
+els.stressMode?.addEventListener('click', () => {
+  stressMode = stressMode === 'exact' ? 'prefix' : 'exact';
   renderStressChips();
   queueFinder();
 });
@@ -315,6 +333,7 @@ els.finderClear?.addEventListener('click', () => {
   els.seedInput.value = '';
   els.slWord.value = '';
   stressPat = [];
+  stressMode = 'exact';
   renderStressChips();
   rebuildSlChips();
   for (const el of Object.values(constraintEls)) { if (el) el.value = ''; }

@@ -64,6 +64,22 @@ check('sad + stress 01 all match', sadIamb.length > 0 && sadIamb.every((r) => {
   return st === '01';
 }), words(sadIamb).slice(0, 6).join(','));
 
+// Stress "any" slot: 2 syllables, first stressed, second anything.
+const anySlot = finder.search({ seeds: ['happy'], constraints: { stress: '1x' } });
+check('happy + stress 1-any: 2 syllables, first stressed', anySlot.length > 0 && anySlot.every((r) => {
+  const st = r.info.phon.dictStresses.map((s) => (s >= 1 ? '1' : '0'));
+  return st.length === 2 && st[0] === '1';
+}), words(anySlot).slice(0, 6).join(','));
+
+// Stress prefix mode: starts stressed-unstressed, any length from 2 up.
+const prefix = finder.search({ seeds: ['happy'], constraints: { stress: '10', stressMode: 'prefix' } });
+check('happy + starts with DUM-da: prefix matches', prefix.length > 0 && prefix.every((r) => {
+  const st = r.info.phon.dictStresses.map((s) => (s >= 1 ? '1' : '0'));
+  return st.length >= 2 && st[0] === '1' && st[1] === '0';
+}), words(prefix).slice(0, 6).join(','));
+check('prefix mode includes longer words', prefix.some((r) => r.info.phon.syllableCount > 2),
+  words(prefix.filter((r) => r.info.phon.syllableCount > 2)).slice(0, 4).join(','));
+
 // Rhyme, seedless.
 const rhyme = finder.search({ constraints: { rhyme: 'light' } });
 check('rhymes with light', words(rhyme).length >= 5 && words(rhyme).every((w) => w !== 'light'),
