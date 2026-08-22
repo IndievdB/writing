@@ -427,34 +427,34 @@ async function populateVoices() {
   if (saved && [...sp.voice.options].some((o) => o.value === saved)) sp.voice.value = saved;
 }
 
+// Picking a model only switches the voice list — nothing downloads until
+// the user actually presses play.
 async function applyModel() {
   const model = sp.model?.value ?? 'sys';
   localStorage.setItem('cadence-model', model);
   await populateVoices();
-  const fallback = async (e) => {
-    speechStatus(`model failed to load (${e?.message ?? e}) — device voices still work`);
-    sp.model.value = 'sys';
-    localStorage.setItem('cadence-model', 'sys');
-    await populateVoices();
-  };
-  if (isNeuralModel(model)) {
-    const dtype = model === 'k4' ? 'q4' : 'q8';
-    if (neuralTTS.state === 'ready' && neuralTTS.dtype === dtype) return;
-    try {
-      await neuralTTS.load(speechStatus, dtype);
-      speechStatus('neural model ready — cached for offline use');
-      setTimeout(() => speechStatus(''), 4000);
-    } catch (e) { await fallback(e); }
+  if (isNeuralModel(model) && !(neuralTTS.state === 'ready' && neuralTTS.dtype === (model === 'k4' ? 'q4' : 'q8'))) {
+    speechStatus(`downloads on first play (~${model === 'k4' ? 45 : 90} MB, then cached offline)`);
+    setTimeout(() => speechStatus(''), 5000);
   } else if (model === 'piper') {
-    if (piperTTS.state === 'ready') return;
-    try {
-      await piperTTS.load(speechStatus);
-      speechStatus('piper ready — each voice downloads on first use, then cached');
-      setTimeout(() => speechStatus(''), 4000);
-    } catch (e) { await fallback(e); }
+    speechStatus('each voice downloads on first play (~25 MB, then cached offline)');
+    setTimeout(() => speechStatus(''), 5000);
   }
 }
 sp.model?.addEventListener('change', applyModel);
+
+// Download (or reuse) the chosen model's engine; called from play.
+async function ensureModelLoaded(model) {
+  if (isNeuralModel(model)) {
+    const dtype = model === 'k4' ? 'q4' : 'q8';
+    if (!(neuralTTS.state === 'ready' && neuralTTS.dtype === dtype)) {
+      await neuralTTS.load(speechStatus, dtype);
+      refreshClearModels();
+    }
+  } else if (model === 'piper' && piperTTS.state !== 'ready') {
+    await piperTTS.load(speechStatus);
+  }
+}
 
 function stopSpeaking() {
   stopSystem();
@@ -481,7 +481,7 @@ function tapStresses() {
   const ctx = tapCtx;
   if (ctx.state === 'suspended') ctx.resume();
   let t = ctx.currentTime + 0.1;
-  const beat = Number($('tap-speed')?.value) || 0.24;
+  const beat = 1 / (Number($('tap-speed')?.value) || 4); // slider = syllables per second
   const hit = (time, stress) => {
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
@@ -518,22 +518,22 @@ async function speakText(text) {
   const model = sp.model?.value ?? 'sys';
   if (isNeuralModel(model)) {
     try {
-      if (neuralTTS.state !== 'ready') await applyModel();
+      await ensureModelLoaded(model);
       speechStatus('synthesizing…');
       await neuralTTS.speak(text, sp.voice.value || NEURAL_VOICES[0][0], done);
       speechStatus('');
     } catch (e) {
-      speechStatus(`synthesis failed (${e?.message ?? e})`);
+      speechStatus(`voice unavailable (${e?.message ?? e}) — try device voices`);
       done();
     }
   } else if (model === 'piper') {
     try {
-      if (piperTTS.state !== 'ready') await applyModel();
+      await ensureModelLoaded(model);
       speechStatus('synthesizing…');
       await piperTTS.speak(text, sp.voice.value || PIPER_VOICES[0][0], done, speechStatus);
       speechStatus('');
     } catch (e) {
-      speechStatus(`synthesis failed (${e?.message ?? e})`);
+      speechStatus(`voice unavailable (${e?.message ?? e}) — try device voices`);
       done();
     }
   } else {

@@ -188,6 +188,11 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-c
   padding: 0.25rem 0.7rem; cursor: pointer;
 }
 .rhythm-controls button:hover { border-color: var(--accent); color: var(--accent); }
+.tap-speed-label {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  font-size: 0.8rem; color: var(--ink-2);
+}
+.tap-speed-label input[type="range"] { width: 130px; accent-color: var(--accent); cursor: pointer; }
 .word-gap { width: 7px; flex: none; }
 .pause-gap {
   width: 18px; flex: none; align-self: flex-end;

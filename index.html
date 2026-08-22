@@ -6,7 +6,7 @@
 <title>Word Study</title>
 <meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=27">
+<link rel="stylesheet" href="css/style.css?v=28">
 </head>
 <body>
 <header class="site-header">
@@ -123,12 +123,9 @@
         Click a block to override it: stressed → unstressed → skip → auto.</p>
       <div class="rhythm-controls">
         <button type="button" id="tap-btn" title="Tap out the stress pattern as percussion — loud beat = stressed, soft tick = unstressed">🥁 Tap stresses</button>
-        <label class="visually-hidden" for="tap-speed">Tap speed</label>
-        <select id="tap-speed">
-          <option value="0.36">slow</option>
-          <option value="0.24" selected>normal</option>
-          <option value="0.17">fast</option>
-        </select>
+        <label class="tap-speed-label" for="tap-speed">speed
+          <input type="range" id="tap-speed" min="2" max="8" step="0.5" value="4"
+            title="Tap speed — syllables per second"></label>
       </div>
       <div id="rhythm-strip"></div>
     </div>
@@ -137,6 +134,6 @@
 
 </main>
 
-<script type="module" src="js/main.js?v=27"></script>
+<script type="module" src="js/main.js?v=28"></script>
 </body>
 </html>
