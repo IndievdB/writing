@@ -3,7 +3,7 @@ import { Lexicon } from './lexicon.js';
 import { analyzeText } from './analyze.js';
 import { Finder } from './finder.js';
 import { renderResults, renderFinderResults } from './ui.js';
-import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES } from './speech.js';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES } from './speech.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -18,7 +18,7 @@ const els = {
   stressClear: $('stress-clear'), stressMode: $('stress-mode'),
 };
 const constraintEls = {
-  rhyme: $('c-rhyme'), syll: $('c-syll'),
+  allit: $('c-allit'), rhyme: $('c-rhyme'), syll: $('c-syll'),
   type: $('c-type'), texture: $('c-texture'), origin: $('c-origin'),
   feel: $('c-feel'), rarity: $('c-rarity'),
 };
@@ -94,12 +94,10 @@ const PHONE_LABELS = {
 };
 const SL_VOWELS = new Set(['AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH', 'ER', 'EY', 'IH', 'IY', 'OW', 'OY', 'UH', 'UW']);
 
-// Sounds-like state: one entry per typed word. Each sound chip cycles
-// off -> anywhere -> at the start -> at the end -> off; a per-word
-// "keep together" toggle requires the chosen sounds to be one consecutive run.
-let slState = []; // [{word, phones, sel: Map(idx -> 'any'|'start'|'end'), grouped}]
-const SL_CYCLE = ['', 'any', 'start', 'end'];
-const SL_BADGE = { any: '•', start: '▸', end: '◂' };
+// Sounds-like state: one entry per typed word. Each sound chip toggles
+// on/off (alliteration has its own box now); a per-word "keep together"
+// toggle requires the chosen sounds to be one consecutive run.
+let slState = []; // [{word, phones, sel: Map(idx -> 'any'), grouped}]
 
 function slWords() {
   return els.slWord.value.toLowerCase()
@@ -141,19 +139,17 @@ function rebuildSlChips() {
       b.className = `sl-chip ${SL_VOWELS.has(ph) ? 'sl-vowel' : 'sl-conson'}`;
       const base = PHONE_LABELS[ph] ?? ph.toLowerCase();
       const paint = () => {
-        const mode = st.sel.get(i) ?? '';
-        b.textContent = mode === 'start' ? `▸${base}` : mode === 'end' ? `${base}◂` : base;
-        b.classList.toggle('on', !!mode);
-        b.setAttribute('aria-pressed', String(!!mode));
+        const on = st.sel.has(i);
+        b.textContent = base;
+        b.classList.toggle('on', on);
+        b.setAttribute('aria-pressed', String(on));
         b.title = `${ph}${SL_VOWELS.has(ph) ? ' (vowel)' : ' (consonant)'}` +
-          (mode ? ` — must appear ${mode === 'any' ? 'anywhere' : 'at the ' + mode}` : '');
+          (on ? ' — must appear in the word' : ' — click to require this sound');
       };
       paint();
       b.addEventListener('click', () => {
-        const cur = st.sel.get(i) ?? '';
-        const next = SL_CYCLE[(SL_CYCLE.indexOf(cur) + 1) % SL_CYCLE.length];
-        if (next) st.sel.set(i, next);
-        else st.sel.delete(i);
+        if (st.sel.has(i)) st.sel.delete(i);
+        else st.sel.set(i, 'any');
         paint();
         groupBtn.hidden = st.sel.size < 2;
         if (st.sel.size < 2) { st.grouped = false; groupBtn.classList.remove('on'); }
@@ -358,24 +354,26 @@ els.finderClear?.addEventListener('click', () => {
 // ONNX/WASM) downloaded once and cached by the browser for offline use.
 
 const sp = {
-  speak: $('speak-btn'), stop: $('stop-speak'), voice: $('voice-select'),
-  model: $('model-select'), rate: $('rate-select'), status: $('speech-status'),
+  speak: $('speak-btn'), tap: $('tap-btn'), stop: $('stop-speak'),
+  voice: $('voice-select'), model: $('model-select'), rate: $('rate-select'),
+  status: $('speech-status'),
 };
 const neuralTTS = new NeuralTTS();
+const piperTTS = new PiperTTS();
 let speaking = false;
 
 function speechStatus(msg) { sp.status.textContent = msg ?? ''; }
 
-// The model select picks the engine (device voices, or a Kokoro build);
-// the voice select then lists that model's voices.
+// The model select picks the engine (device voices, a Kokoro build, or
+// Piper); the voice select then lists that model's voices.
 const isNeuralModel = (m) => m === 'k8' || m === 'k4';
 
 async function populateVoices() {
   const model = sp.model?.value ?? 'sys';
   const saved = localStorage.getItem(`cadence-voice-${model}`) ?? '';
   sp.voice.innerHTML = '';
-  if (isNeuralModel(model)) {
-    for (const [id, label] of NEURAL_VOICES) {
+  if (isNeuralModel(model) || model === 'piper') {
+    for (const [id, label] of (model === 'piper' ? PIPER_VOICES : NEURAL_VOICES)) {
       const o = document.createElement('option');
       o.value = id;
       o.textContent = label;
@@ -404,6 +402,12 @@ async function applyModel() {
   const model = sp.model?.value ?? 'sys';
   localStorage.setItem('cadence-model', model);
   await populateVoices();
+  const fallback = async (e) => {
+    speechStatus(`model failed to load (${e?.message ?? e}) — device voices still work`);
+    sp.model.value = 'sys';
+    localStorage.setItem('cadence-model', 'sys');
+    await populateVoices();
+  };
   if (isNeuralModel(model)) {
     const dtype = model === 'k4' ? 'q4' : 'q8';
     if (neuralTTS.state === 'ready' && neuralTTS.dtype === dtype) return;
@@ -411,12 +415,14 @@ async function applyModel() {
       await neuralTTS.load(speechStatus, dtype);
       speechStatus('neural model ready — cached for offline use');
       setTimeout(() => speechStatus(''), 4000);
-    } catch (e) {
-      speechStatus(`neural model failed to load (${e?.message ?? e}) — device voices still work`);
-      sp.model.value = 'sys';
-      localStorage.setItem('cadence-model', 'sys');
-      await populateVoices();
-    }
+    } catch (e) { await fallback(e); }
+  } else if (model === 'piper') {
+    if (piperTTS.state === 'ready') return;
+    try {
+      await piperTTS.load(speechStatus);
+      speechStatus('piper ready — each voice downloads on first use, then cached');
+      setTimeout(() => speechStatus(''), 4000);
+    } catch (e) { await fallback(e); }
   }
 }
 sp.model?.addEventListener('change', applyModel);
@@ -424,7 +430,51 @@ sp.model?.addEventListener('change', applyModel);
 function stopSpeaking() {
   stopSystem();
   neuralTTS.stop();
+  piperTTS.stop();
+  stopTapping();
   speaking = false;
+}
+
+// Percussive stress playback: one drum hit per syllable — a deep thump for
+// stressed, a light tick for unstressed, a rest at pauses.
+let tapCtx = null;
+let tapNodes = [];
+function stopTapping() {
+  for (const n of tapNodes) { try { n.stop(); } catch { /* already done */ } }
+  tapNodes = [];
+}
+function tapStresses() {
+  if (!els.input.value.trim()) return;
+  run();
+  if (!lastResult) return;
+  stopSpeaking();
+  tapCtx = tapCtx ?? new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = tapCtx;
+  if (ctx.state === 'suspended') ctx.resume();
+  let t = ctx.currentTime + 0.1;
+  const hit = (time, stress) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const strong = stress === 1;
+    const mid = stress === 2;
+    osc.frequency.setValueAtTime(strong ? 150 : mid ? 180 : 240, time);
+    osc.frequency.exponentialRampToValueAtTime(strong ? 55 : mid ? 75 : 120, time + 0.09);
+    const peak = strong ? 0.9 : mid ? 0.5 : 0.22;
+    gain.gain.setValueAtTime(peak, time);
+    gain.gain.exponentialRampToValueAtTime(0.001, time + (strong ? 0.18 : 0.09));
+    osc.connect(gain).connect(ctx.destination);
+    osc.start(time);
+    osc.stop(time + 0.22);
+    tapNodes.push(osc);
+  };
+  for (const s of lastResult.sentences) {
+    for (const syl of s.sylls) {
+      hit(t, syl.stress);
+      t += 0.24;
+      if (syl.pauseAfter) t += 0.26;
+    }
+    t += 0.4;
+  }
 }
 
 async function speakText(text) {
@@ -433,11 +483,22 @@ async function speakText(text) {
   const rate = Number(sp.rate.value) || 1;
   const done = () => { speaking = false; };
   speaking = true;
-  if (isNeuralModel(sp.model?.value)) {
+  const model = sp.model?.value ?? 'sys';
+  if (isNeuralModel(model)) {
     try {
       if (neuralTTS.state !== 'ready') await applyModel();
       speechStatus('synthesizing…');
       await neuralTTS.speak(text, sp.voice.value || NEURAL_VOICES[0][0], done);
+      speechStatus('');
+    } catch (e) {
+      speechStatus(`synthesis failed (${e?.message ?? e})`);
+      done();
+    }
+  } else if (model === 'piper') {
+    try {
+      if (piperTTS.state !== 'ready') await applyModel();
+      speechStatus('synthesizing…');
+      await piperTTS.speak(text, sp.voice.value || PIPER_VOICES[0][0], done, speechStatus);
       speechStatus('');
     } catch (e) {
       speechStatus(`synthesis failed (${e?.message ?? e})`);
@@ -449,6 +510,7 @@ async function speakText(text) {
 }
 
 sp.speak?.addEventListener('click', () => speakText(els.input.value));
+sp.tap?.addEventListener('click', tapStresses);
 sp.stop?.addEventListener('click', stopSpeaking);
 sp.voice?.addEventListener('change', () =>
   localStorage.setItem(`cadence-voice-${sp.model?.value ?? 'sys'}`, sp.voice.value));

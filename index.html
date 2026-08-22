@@ -6,7 +6,7 @@
 <title>Word Study</title>
 <meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=23">
+<link rel="stylesheet" href="css/style.css?v=24">
 </head>
 <body>
 <header class="site-header">
@@ -30,6 +30,8 @@
       <div id="sl-phones" class="sl-phones" role="group" aria-label="Sounds to match"></div>
     </div>
     <div class="constraint-grid">
+      <label>Alliterates with
+        <input id="c-allit" autocomplete="off" placeholder="a word: silver"></label>
       <label>Rhymes with
         <input id="c-rhyme" autocomplete="off" placeholder="a word: light"></label>
       <label>Syllables
@@ -88,12 +90,14 @@
       placeholder="Build your sentence here…"></textarea>
     <div class="speech-row" role="group" aria-label="Read aloud">
       <button type="button" id="speak-btn" title="Read the sentence aloud">▶ Read aloud</button>
+      <button type="button" id="tap-btn" title="Tap out the sentence's stress pattern as percussion — loud beat = stressed, soft tick = unstressed">🥁 Tap stresses</button>
       <button type="button" id="stop-speak" title="Stop">■</button>
       <label class="visually-hidden" for="model-select">Speech model</label>
       <select id="model-select" title="Speech model — neural models download once and are cached in your browser for offline use">
         <option value="sys">device voices</option>
         <option value="k8">Kokoro neural — quality (~90 MB)</option>
         <option value="k4">Kokoro neural — light (~45 MB)</option>
+        <option value="piper">Piper neural — fast (~25 MB per voice)</option>
       </select>
       <label class="visually-hidden" for="voice-select">Voice</label>
       <select id="voice-select"></select>
@@ -122,6 +126,6 @@
 
 </main>
 
-<script type="module" src="js/main.js?v=23"></script>
+<script type="module" src="js/main.js?v=24"></script>
 </body>
 </html>

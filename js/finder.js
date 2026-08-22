@@ -621,6 +621,21 @@ export class Finder {
       const w = c.rhyme.trim().toLowerCase();
       if (key) tests.push((p, word) => word !== w && p.rhymeKey === key);
     }
+    if (c.allit?.trim()) {
+      // Alliteration: the same opening sound. Vowel-initial words
+      // alliterate with any vowel-initial word (the classical rule).
+      const aw = c.allit.trim().toLowerCase().split(/\s+/)[0];
+      const ap = this.phon(aw);
+      const first = ap?.phones?.[0];
+      if (first) {
+        const isVowel = VOWELS.has(first);
+        tests.push((p, word) => {
+          if (word === aw) return false;
+          const f = p.phones?.[0];
+          return isVowel ? VOWELS.has(f) : f === first;
+        });
+      }
+    }
     if (c.syll?.trim()) {
       const m = c.syll.trim().match(/^(\d+)(?:\s*[-–]\s*(\d+))?$/);
       if (m) {

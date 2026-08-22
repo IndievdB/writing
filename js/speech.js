@@ -21,6 +21,21 @@ export const NEURAL_VOICES = [
   ['bm_george', 'George (UK male)'],
 ];
 
+// Piper (VITS) voices — each is its own ~20-60 MB model, downloaded on first
+// use and cached by the library for offline reuse.
+const PIPER_CDN_URLS = [
+  'https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.4/+esm',
+  'https://esm.sh/@mintplex-labs/piper-tts-web@1.0.4',
+];
+export const PIPER_VOICES = [
+  ['en_US-hfc_female-medium', 'HFC (US female)'],
+  ['en_US-amy-medium', 'Amy (US female)'],
+  ['en_US-ryan-high', 'Ryan (US male)'],
+  ['en_US-joe-medium', 'Joe (US male)'],
+  ['en_GB-jenny_dioco-medium', 'Jenny (UK female)'],
+  ['en_GB-alan-medium', 'Alan (UK male)'],
+];
+
 // ---------------------------------------------------------------------------
 // System tier
 
@@ -151,6 +166,71 @@ export class NeuralTTS {
       const samples = audio.audio ?? audio.data ?? audio;
       const rate = audio.sampling_rate ?? audio.sampleRate ?? 24000;
       url = URL.createObjectURL(pcmToWavBlob(samples, rate));
+      if (this.cache.size > 40) {
+        const first = this.cache.keys().next().value;
+        URL.revokeObjectURL(this.cache.get(first));
+        this.cache.delete(first);
+      }
+      this.cache.set(key, url);
+    }
+    this.audioEl = new Audio(url);
+    this.audioEl.addEventListener('ended', () => onDone?.(null));
+    this.audioEl.addEventListener('error', () => onDone?.('playback failed'));
+    await this.audioEl.play();
+  }
+
+  stop() {
+    if (this.audioEl) { this.audioEl.pause(); this.audioEl = null; }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Piper tier: lightweight VITS voices via @mintplex-labs/piper-tts-web.
+// The module import is small; each voice model downloads on first synthesis
+// (with progress) and is cached by the library for offline use.
+
+export class PiperTTS {
+  constructor() {
+    this.state = 'idle'; // idle | loading | ready | error
+    this.mod = null;
+    this.error = null;
+    this.audioEl = null;
+    this.cache = new Map(); // voice|text -> object URL (session-scoped)
+  }
+
+  async load(onProgress) {
+    if (this.state === 'ready' || this.state === 'loading') return;
+    this.state = 'loading';
+    this.error = null;
+    try {
+      let mod = null, lastErr = null;
+      for (const url of PIPER_CDN_URLS) {
+        try { mod = await import(url); break; }
+        catch (e) { lastErr = e; }
+      }
+      if (!mod?.predict) throw lastErr ?? new Error('CDN unreachable');
+      this.mod = mod;
+      this.state = 'ready';
+      onProgress?.(null);
+    } catch (e) {
+      this.state = 'error';
+      this.error = e?.message ?? String(e);
+      onProgress?.(null);
+      throw e;
+    }
+  }
+
+  async speak(text, voiceId, onDone = null, onProgress = null) {
+    if (this.state !== 'ready') throw new Error('piper not loaded');
+    this.stop();
+    const key = `${voiceId}|${text}`;
+    let url = this.cache.get(key);
+    if (!url) {
+      const blob = await this.mod.predict({ text, voiceId }, (p) => {
+        if (p?.total) onProgress?.(`downloading voice… ${Math.round((p.loaded / p.total) * 100)}% of ${Math.round(p.total / 1e6)} MB`);
+      });
+      onProgress?.(null);
+      url = URL.createObjectURL(blob);
       if (this.cache.size > 40) {
         const first = this.cache.keys().next().value;
         URL.revokeObjectURL(this.cache.get(first));

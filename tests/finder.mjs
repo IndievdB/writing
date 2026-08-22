@@ -90,6 +90,15 @@ check('beat words (this/no/not) only in stressed', ['this', 'no', 'not'].every((
   words(st1).slice(0, 8).join(','));
 check('dual words (that/some/what) in both', ['that', 'some', 'what'].every((w) => un1w.has(w) && st1w.has(w)));
 
+// Alliteration: same opening sound as the given word.
+const allit = finder.search({ seeds: ['happy'], constraints: { allit: 'silver' } });
+check('happy + alliterates with silver: all start with S', allit.length > 0 &&
+  allit.every((r) => r.info.phon.phones[0] === 'S'), words(allit).slice(0, 6).join(','));
+const allitV = finder.search({ constraints: { allit: 'apple', syll: '1' } });
+check('vowel alliteration: all start with a vowel', allitV.length > 0 &&
+  allitV.every((r) => ['AA','AE','AH','AO','AW','AY','EH','ER','EY','IH','IY','OW','OY','UH','UW'].includes(r.info.phon.phones[0])),
+  words(allitV).slice(0, 6).join(','));
+
 // Rhyme, seedless.
 const rhyme = finder.search({ constraints: { rhyme: 'light' } });
 check('rhymes with light', words(rhyme).length >= 5 && words(rhyme).every((w) => w !== 'light'),
