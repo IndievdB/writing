@@ -6,6 +6,7 @@ import {
   FUNCTION_WORDS, GERMANIC_COMMON, LATINATE_COMMON, LATINATE_SUFFIXES,
   LATINATE_PREFIXES, GERMANIC_SUFFIXES, LATINATE_SWAPS,
 } from './wordlists.js';
+import { ETYM_GERMANIC, ETYM_LATINATE } from './etymology-data.js';
 
 // Returns { origin: 'latinate'|'germanic'|'neutral', confidence: 0..1, swap }
 export function classifyOrigin(word, { syllableCount = null, freqRank = null } = {}) {
@@ -14,8 +15,8 @@ export function classifyOrigin(word, { syllableCount = null, freqRank = null } =
   const swap = LATINATE_SWAPS.get(w) || null;
 
   if (FUNCTION_WORDS.has(w)) return { origin: 'germanic', confidence: 0.9, swap: null };
-  if (GERMANIC_COMMON.has(w)) return { origin: 'germanic', confidence: 0.95, swap: null };
-  if (LATINATE_COMMON.has(w) || swap) return { origin: 'latinate', confidence: 0.9, swap };
+  if (GERMANIC_COMMON.has(w) || ETYM_GERMANIC.has(w)) return { origin: 'germanic', confidence: 0.95, swap: null };
+  if (LATINATE_COMMON.has(w) || ETYM_LATINATE.has(w) || swap) return { origin: 'latinate', confidence: 0.9, swap };
 
   let score = 0; // positive = Latinate, negative = Germanic
 
