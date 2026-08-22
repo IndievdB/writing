@@ -248,3 +248,32 @@ export class PiperTTS {
     if (this.audioEl) { this.audioEl.pause(); this.audioEl = null; }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Cache maintenance: remove downloaded model files so the user can reclaim
+// disk. Kokoro (transformers.js) stores in the Cache API; Piper's store is
+// flushed through its own API when the module is loaded. Only caches that
+// look like model stores are touched — never the whole origin.
+
+export async function clearModelCaches(piperMod = null) {
+  let cleared = false;
+  try {
+    if (typeof caches !== 'undefined') {
+      for (const name of await caches.keys()) {
+        if (/transformers|onnx|kokoro|piper|tts/i.test(name)) {
+          cleared = (await caches.delete(name)) || cleared;
+        }
+      }
+    }
+  } catch { /* cache API unavailable */ }
+  try {
+    if (piperMod?.flush) { await piperMod.flush(); cleared = true; }
+  } catch { /* piper store unavailable */ }
+  return cleared;
+}
+
+// Rough bytes of site storage (mostly the downloaded models).
+export async function storageUsage() {
+  try { return (await navigator.storage?.estimate?.())?.usage ?? null; }
+  catch { return null; }
+}

@@ -3,7 +3,7 @@ import { Lexicon } from './lexicon.js';
 import { analyzeText } from './analyze.js';
 import { Finder } from './finder.js';
 import { renderResults, renderFinderResults } from './ui.js';
-import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES } from './speech.js';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -385,7 +385,7 @@ els.finderClear?.addEventListener('click', () => {
 const sp = {
   speak: $('speak-btn'), tap: $('tap-btn'), stop: $('stop-speak'),
   voice: $('voice-select'), model: $('model-select'), rate: $('rate-select'),
-  status: $('speech-status'),
+  status: $('speech-status'), clearModels: $('clear-models'),
 };
 const neuralTTS = new NeuralTTS();
 const piperTTS = new PiperTTS();
@@ -546,6 +546,38 @@ sp.tap?.addEventListener('click', tapStresses);
 sp.stop?.addEventListener('click', stopSpeaking);
 sp.voice?.addEventListener('change', () =>
   localStorage.setItem(`cadence-voice-${sp.model?.value ?? 'sys'}`, sp.voice.value));
+
+// "Clear downloaded voices": shown once site storage holds real model data;
+// deletes the model caches and resets the engines so re-selecting a neural
+// model re-downloads cleanly.
+const MB = 1e6;
+async function refreshClearModels() {
+  if (!sp.clearModels) return;
+  const usage = await storageUsage();
+  const show = usage != null && usage > 5 * MB;
+  sp.clearModels.hidden = !show;
+  if (show) sp.clearModels.textContent = `clear downloaded voices (~${Math.round(usage / MB)} MB)`;
+}
+sp.clearModels?.addEventListener('click', async () => {
+  stopSpeaking();
+  const before = await storageUsage();
+  await clearModelCaches(piperTTS.mod);
+  neuralTTS.state = 'idle';
+  neuralTTS.tts = null;
+  neuralTTS.dtype = null;
+  const after = await storageUsage();
+  const freed = before != null && after != null ? Math.max(0, before - after) : null;
+  sp.model.value = 'sys';
+  localStorage.setItem('cadence-model', 'sys');
+  await populateVoices();
+  speechStatus(freed != null
+    ? `cleared ${Math.round(freed / MB)} MB — models re-download when you next pick a neural model`
+    : 'downloaded models cleared — they re-download when you next pick a neural model');
+  setTimeout(() => speechStatus(''), 6000);
+  refreshClearModels();
+});
+refreshClearModels();
+setInterval(refreshClearModels, 20000);
 
 // Restore the chosen model (legacy 'cadence-neural' flag maps to quality).
 const savedModel = localStorage.getItem('cadence-model')
