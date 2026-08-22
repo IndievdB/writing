@@ -239,6 +239,47 @@ export class Finder {
     return [];
   }
 
+  // Anything the finder can say something about counts as a known word —
+  // curated entries, definitions, WordNet, the pronouncing dictionary, or a
+  // recognizable inflection of one of those.
+  isKnownWord(w) {
+    return this.defs.has(w) || this.curated.has(w) || this.byWord.has(w) ||
+      this.lex.phones.has(w) || this.lex.freq.has(w) || !!this.detectInflection(w);
+  }
+
+  // "Did you mean" candidates for a non-word: dictionary words within edit
+  // distance 1 (distance 2 as a fallback), most common first.
+  spellSuggestions(word, max = 6) {
+    const known = (w) => (this.lex.freq.has(w) && this.lex.phones.has(w)) ||
+      this.defs.has(w) || this.curated.has(w);
+    const AL = "abcdefghijklmnopqrstuvwxyz'-";
+    const edits = (w) => {
+      const out = new Set();
+      for (let i = 0; i <= w.length; i++) {
+        const a = w.slice(0, i), b = w.slice(i);
+        if (b) out.add(a + b.slice(1));
+        if (b.length > 1) out.add(a + b[1] + b[0] + b.slice(2));
+        for (const c of AL) {
+          if (b) out.add(a + c + b.slice(1));
+          out.add(a + c + b);
+        }
+      }
+      return out;
+    };
+    let cands = [...edits(word)].filter((w) => w !== word && w.length > 1 && known(w));
+    if (!cands.length && word.length <= 10) {
+      const found = new Set();
+      for (const e of edits(word)) {
+        for (const w of edits(e)) {
+          if (w !== word && w.length > 1 && !found.has(w) && known(w)) found.add(w);
+        }
+      }
+      cands = [...found];
+    }
+    const rank = (w) => this.lex.freq.get(w) ?? this.lex.freqRank(w) ?? 1e9;
+    return [...new Set(cands)].sort((a, b) => rank(a) - rank(b)).slice(0, max);
+  }
+
   phon(word) {
     let p = this.phonCache.get(word);
     if (!p) {

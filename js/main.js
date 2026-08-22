@@ -203,13 +203,29 @@ function runFinder() {
   renderFinderResults(results, els.finderResults, els.finderStatus, pinPopup, { empty });
   if (els.chipLegend) els.chipLegend.hidden = !results.length;
 
-  // Definitions of the seed words, inline under the input.
+  // Definitions of the seed words, inline under the input — and spelling
+  // suggestions for anything the dictionaries don't know.
   const defs = seeds.flatMap((s) => {
     const d = finder.definitionsFor(s, seeds.length > 1 ? 2 : 4);
     return d.map((x) => ({ ...x, of: seeds.length > 1 ? s : x.of }));
   });
-  els.seedDef.hidden = !defs.length;
-  els.seedDef.innerHTML = defs.map((d) => defLine(d)).join('<br>');
+  const lines = defs.map((d) => defLine(d));
+  for (const w of [...new Set(seeds)]) {
+    if (w.length < 2 || finder.isKnownWord(w)) continue;
+    const sugs = finder.spellSuggestions(w);
+    lines.push(`<span class="spell-note">“${escText(w)}” isn’t a word we know${sugs.length ? ' — did you mean' : ''}</span>` +
+      sugs.map((s) => ` <button type="button" class="spell-sug" data-bad="${escText(w)}" data-good="${escText(s)}">${escText(s)}</button>`).join('') +
+      (sugs.length ? '<span class="spell-note">?</span>' : ''));
+  }
+  els.seedDef.hidden = !lines.length;
+  els.seedDef.innerHTML = lines.join('<br>');
+  for (const b of els.seedDef.querySelectorAll('.spell-sug')) {
+    b.addEventListener('click', () => {
+      const rx = new RegExp(b.dataset.bad.replace(/[.*+?^\${}()|[\]\\]/g, '\\$&'), 'i');
+      els.seedInput.value = els.seedInput.value.replace(rx, b.dataset.good);
+      runFinder();
+    });
+  }
 }
 
 const POS_FULL = { N: 'noun', V: 'verb', J: 'adj.', R: 'adv.', '': '' };

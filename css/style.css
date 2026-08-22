@@ -406,6 +406,13 @@ td.num { font-variant-numeric: tabular-nums; }
 .word-chip:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--page)); }
 .chip-word { font-size: 0.98rem; }
 .chip-meta { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
+.spell-note { color: var(--muted); }
+.spell-sug {
+  border: 1px solid var(--hairline); border-radius: 999px; background: none;
+  color: var(--accent); font: inherit; font-size: 0.85rem;
+  padding: 0.05rem 0.55rem; margin: 0 0.1rem; cursor: pointer;
+}
+.spell-sug:hover { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--page)); }
 .chip-legend {
   margin: 0.45rem 0 0; font-size: 0.76rem; color: var(--muted);
 }
