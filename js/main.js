@@ -1,9 +1,9 @@
 // App wiring: data loading, input handling, theme toggle.
-import { Lexicon } from './lexicon.js?v=32';
-import { analyzeText } from './analyze.js?v=32';
-import { Finder } from './finder.js?v=32';
-import { renderResults, renderFinderResults } from './ui.js?v=32';
-import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=32';
+import { Lexicon } from './lexicon.js?v=33';
+import { analyzeText } from './analyze.js?v=33';
+import { Finder } from './finder.js?v=33';
+import { renderResults, renderFinderResults } from './ui.js?v=33';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=33';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -60,6 +60,16 @@ async function loadData() {
   }
 }
 
+// Prosody lenses on the rhythm strip, individually toggleable.
+const rhythmLenses = { dur: true, pitch: true, arcs: true, vowels: true };
+for (const k of Object.keys(rhythmLenses)) {
+  $(`lens-${k}`)?.addEventListener('click', (e) => {
+    rhythmLenses[k] = !rhythmLenses[k];
+    e.currentTarget.classList.toggle('on', rhythmLenses[k]);
+    run();
+  });
+}
+
 // Per-syllable stress overrides for the rhythm strip and tapping:
 // "si:k" -> '1' | '0' | 'skip'. Reset whenever the sentence text changes.
 let stressOverrides = new Map();
@@ -79,7 +89,7 @@ function run() {
   if (!text.trim()) { els.results.hidden = true; return; }
   if (text !== overriddenText) { stressOverrides.clear(); overriddenText = text; }
   lastResult = analyzeText(text, lexicon);
-  renderResults(lastResult, els, { overrides: stressOverrides, onToggle: toggleStress });
+  renderResults(lastResult, els, { overrides: stressOverrides, onToggle: toggleStress, lenses: rhythmLenses });
   els.results.hidden = false;
   saveHash();
 }
@@ -511,7 +521,7 @@ function tapStresses() {
       const ov = stressOverrides.get(`${si}:${k}`);
       if (ov === 'skip') return; // elided syllable: no beat, no time slot
       hit(t, ov === '1' ? 1 : ov === '0' ? 0 : syl.stress);
-      t += beat;
+      t += beat * ((syl.dur ?? 1.3) / 1.3); // long syllables get longer slots
       if (syl.pauseAfter) t += beat + 0.05;
     });
     t += beat * 1.6;

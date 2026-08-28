@@ -6,7 +6,7 @@
 <title>Word Study</title>
 <meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=32">
+<link rel="stylesheet" href="css/style.css?v=33">
 </head>
 <body>
 <header class="site-header">
@@ -123,14 +123,22 @@
   <section id="results" class="results" hidden>
     <div class="panel">
       <h2>Rhythm</h2>
-      <p class="panel-hint">One block per syllable — tall = stressed, short = unstressed.
-        Red bars are two stresses next to each other.
-        Click a block to override it: stressed → unstressed → skip → auto.</p>
+      <p class="panel-hint">One block per syllable — tall = stressed, short = unstressed; red = two
+        stresses colliding, striped = a long unstressed run. Block width follows how long the
+        syllable takes to say; the underline color is its vowel (gold = bright, blue = dark).
+        The line above is the predicted pitch of a neutral reading; arcs below join repeated
+        sounds. Click a block to override it: stressed → unstressed → skip → auto.</p>
       <div class="rhythm-controls">
         <button type="button" id="tap-btn" title="Tap out the stress pattern as percussion — loud beat = stressed, soft tick = unstressed">🥁 Tap stresses</button>
         <label class="tap-speed-label" for="tap-speed">speed
           <input type="range" id="tap-speed" min="2" max="8" step="0.5" value="4"
             title="Tap speed — syllables per second"></label>
+        <span class="lens-toggles">
+          <button type="button" id="lens-dur" class="lens-btn on" title="Block widths follow estimated spoken duration">durations</button>
+          <button type="button" id="lens-pitch" class="lens-btn on" title="Predicted pitch contour of a neutral reading">pitch</button>
+          <button type="button" id="lens-arcs" class="lens-btn on" title="Arcs joining repeated opening sounds and stressed vowels">echoes</button>
+          <button type="button" id="lens-vowels" class="lens-btn on" title="Underline color: gold = bright front vowel, blue = dark back vowel">vowel color</button>
+        </span>
       </div>
       <div id="rhythm-strip"></div>
     </div>
@@ -139,6 +147,6 @@
 
 </main>
 
-<script type="module" src="js/main.js?v=32"></script>
+<script type="module" src="js/main.js?v=33"></script>
 </body>
 </html>

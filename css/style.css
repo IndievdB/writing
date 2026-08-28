@@ -188,6 +188,33 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-c
   padding: 0.25rem 0.7rem; cursor: pointer;
 }
 .rhythm-controls button:hover { border-color: var(--accent); color: var(--accent); }
+.lens-toggles { display: inline-flex; gap: 0.3rem; margin-left: 0.4rem; flex-wrap: wrap; }
+.lens-btn {
+  border: 1px dashed var(--hairline) !important; border-radius: 999px !important;
+  background: none !important; color: var(--muted) !important;
+  font-size: 0.75rem !important; padding: 0.12rem 0.55rem !important;
+}
+.lens-btn.on {
+  border-style: solid !important; color: var(--accent) !important;
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--hairline)) !important;
+}
+.rhythm-inner { position: relative; width: max-content; }
+.rhythm-line.with-pitch { padding-top: 30px; }
+.rhythm-inner.with-arcs { padding-bottom: 18px; }
+.prosody-overlay { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.pitch-line {
+  fill: none; stroke: color-mix(in srgb, var(--accent) 75%, var(--ink-2));
+  stroke-width: 1.6; stroke-linejoin: round; opacity: 0.85; pointer-events: stroke;
+}
+.echo-arc { fill: none; stroke-width: 1.5; opacity: 0.75; pointer-events: stroke; }
+.echo-arc.echo-vowel { stroke-dasharray: 4 3; }
+.syll.patter {
+  background: repeating-linear-gradient(135deg, var(--accent-mid) 0 3px,
+    color-mix(in srgb, var(--accent-mid) 35%, var(--page)) 3px 6px);
+}
+.prosody-verdict {
+  margin-top: 0.25rem; font-size: 0.78rem; color: var(--muted);
+}
 .tap-speed-label {
   display: inline-flex; align-items: center; gap: 0.45rem;
   font-size: 0.8rem; color: var(--ink-2);

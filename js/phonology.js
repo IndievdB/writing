@@ -1,6 +1,6 @@
 // Per-word phonological analysis on top of the CMU dictionary.
-import { VOWELS, graphemeFallback } from './lexicon.js?v=32';
-import { FUNCTION_WORDS } from './wordlists.js?v=32';
+import { VOWELS, graphemeFallback } from './lexicon.js?v=33';
+import { FUNCTION_WORDS } from './wordlists.js?v=33';
 
 export const PLOSIVES = new Set(['P', 'B', 'T', 'D', 'K', 'G']);
 export const AFFRICATES = new Set(['CH', 'JH']);
@@ -94,4 +94,42 @@ export function analyzeWord(word, phoneString, posHint = '') {
       darkVowels: vowelPhones.filter((v) => DARK_VOWELS.has(v)).length,
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Prosody-lens helpers: split a word's phones into syllables and estimate
+// each syllable's spoken duration (long nuclei and consonant codas stretch,
+// stress stretches further).
+
+const LONG_NUCLEI = new Set(['IY', 'UW', 'EY', 'OW', 'AY', 'AW', 'OY', 'AO', 'AA', 'ER']);
+
+export function syllabify(phones) {
+  const nuclei = [];
+  phones.forEach((p, i) => { if (VOWELS.has(p)) nuclei.push(i); });
+  if (!nuclei.length) return phones.length ? [phones.slice()] : [];
+  const out = [];
+  let start = 0;
+  for (let k = 0; k < nuclei.length; k++) {
+    let end;
+    if (k === nuclei.length - 1) end = phones.length;
+    else {
+      // Consonants between nuclei: give one to the next onset, keep the rest.
+      const gapStart = nuclei[k] + 1, gapEnd = nuclei[k + 1];
+      end = gapEnd - gapStart === 0 ? gapStart : gapEnd - 1;
+    }
+    out.push(phones.slice(start, end));
+    start = end;
+  }
+  return out;
+}
+
+export function syllableInfo(sylPhones, stressed) {
+  const nucleus = sylPhones.find((p) => VOWELS.has(p)) ?? null;
+  const nIdx = nucleus ? sylPhones.indexOf(nucleus) : sylPhones.length;
+  let dur = 1;
+  if (nucleus && LONG_NUCLEI.has(nucleus)) dur += 0.45;
+  dur += 0.22 * Math.max(0, sylPhones.length - nIdx - 1); // coda consonants
+  if (nIdx > 1) dur += 0.15;                              // onset cluster
+  if (stressed) dur += 0.35;
+  return { nucleus, dur };
 }

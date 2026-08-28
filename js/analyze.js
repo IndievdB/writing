@@ -5,13 +5,13 @@
 // calibrated band (some clash, some Latinate, some length variety is GOOD —
 // the target is a band, not zero). Findings are generated only where a metric
 // crosses a threshold, and every finding is anchored to exact source spans.
-import { tokenize, splitSentences } from './tokenize.js?v=32';
-import { analyzeWord } from './phonology.js?v=32';
-import { classifyOrigin } from './etymology.js?v=32';
+import { tokenize, splitSentences } from './tokenize.js?v=33';
+import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=33';
+import { classifyOrigin } from './etymology.js?v=33';
 import {
   FUNCTION_WORDS, COORDINATORS, SUBORDINATORS, BE_FORMS, WEAK_VERBS, FILLERS,
   IRREGULAR_PARTICIPLES, SUBJECT_PRONOUNS,
-} from './wordlists.js?v=32';
+} from './wordlists.js?v=33';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers
@@ -147,11 +147,15 @@ function buildSyllables(toks, ann) {
     }
     if (t.kind !== 'word' && t.kind !== 'number') continue;
     const a = ann[w++];
+    const groups = syllabify(a.phon.phones ?? []);
     a.phon.stresses.forEach((s, i) => {
+      const ph = groups[i] ?? [];
+      const { nucleus, dur } = syllableInfo(ph, s >= 1);
       sylls.push({
         wordIndex: w - 1, stress: s,
         first: i === 0, last: i === a.phon.stresses.length - 1,
         pauseAfter: false,
+        phones: ph, nucleus, dur,
       });
     });
   }
