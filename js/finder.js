@@ -431,7 +431,7 @@ export class Finder {
 
   // ---- meaning search ------------------------------------------------------
 
-  seedCandidates(seeds) {
+  seedCandidates(seeds, wide = false) {
     const cand = new Map(); // word -> {score, matched:Set<seed>, reasons:Set}
     const bump = (word, seed, score, reason) => {
       if (seeds.includes(word)) return;
@@ -495,7 +495,10 @@ export class Finder {
               const anchored = vias.size >= 2 ||
                 (nMap && (nMap.has(seed) ||
                   [...nMap.keys()].some((k) => cur.has(k) && !vias.has(k))));
+              // Wide mode admits every strong two-hop chain, not just the
+              // triangle-anchored ones — more reach, some sense drift.
               if (anchored) bump(n, rawSeed, 0.35, `near “${rawSeed}” (via ${[...vias][0]})`);
+              else if (wide) bump(n, rawSeed, 0.25, `synonym of “${[...vias][0]}” (≈${rawSeed})`);
             }
           }
         }
@@ -980,7 +983,7 @@ export class Finder {
     };
 
     if (seeds.length) {
-      const cand = this.seedCandidates(seeds);
+      const cand = this.seedCandidates(seeds, !!constraints.wide);
       for (const [word, c] of cand) consider(word, c);
     } else {
       if (!hasConstraints && !constraints.origin && !constraints.feel && !constraints.rarity) return [];
@@ -1002,7 +1005,7 @@ export class Finder {
       const kept = kind;
       kind = null;
       seeds = [...originalSeeds];
-      const cand = this.seedCandidates(seeds);
+      const cand = this.seedCandidates(seeds, !!constraints.wide);
       for (const [word, c] of cand) consider(word, c);
       kind = kept;
     }

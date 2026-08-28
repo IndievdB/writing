@@ -199,6 +199,7 @@ function runFinder() {
   const seeds = groups.flat();
   const constraints = {};
   for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el ? el.value : '';
+  constraints.wide = !!$('c-wide')?.checked;
   constraints.stress = stressPat.join('');
   constraints.stressMode = stressPat.length ? stressMode : '';
   constraints.sl = slState.map((st) => ({
@@ -312,6 +313,7 @@ els.input?.addEventListener('input', queueRun);
 let finderTimer = null;
 const queueFinder = () => { clearTimeout(finderTimer); finderTimer = setTimeout(runFinder, 250); };
 els.seedInput?.addEventListener('input', queueFinder);
+$('c-wide')?.addEventListener('change', queueFinder);
 els.slWord?.addEventListener('input', () => { rebuildSlChips(); queueFinder(); });
 
 // Stress-pattern builder: visual DUM/da chips instead of 1/0 notation.
@@ -370,6 +372,8 @@ for (const el of Object.values(constraintEls)) {
 els.finderClear?.addEventListener('click', () => {
   els.seedInput.value = '';
   els.slWord.value = '';
+  const wide = $('c-wide');
+  if (wide) wide.checked = false;
   stressPat = [];
   stressMode = 'exact';
   renderStressChips();

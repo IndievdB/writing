@@ -90,6 +90,16 @@ check('beat words (this/no/not) only in stressed', ['this', 'no', 'not'].every((
   words(st1).slice(0, 8).join(','));
 check('dual words (that/some/what) in both', ['that', 'some', 'what'].every((w) => un1w.has(w) && st1w.has(w)));
 
+// Wide mode: synonyms of synonyms join the pool (at lower rank).
+const narrow = finder.search({ seeds: ['sad'] });
+const wideR = finder.search({ seeds: ['sad'], constraints: { wide: true } });
+check('wide returns more than narrow', wideR.length > narrow.length,
+  `${narrow.length} -> ${wideR.length}`);
+const narrowSet = new Set(words(narrow));
+check('narrow results all present in wide', words(narrow).every((w) => words(wideR).includes(w)));
+check('narrow top-5 unchanged by wide', words(narrow).slice(0, 5).join() === words(wideR).slice(0, 5).join(),
+  words(wideR).slice(0, 5).join(','));
+
 // Alliteration: same opening sound as the given word.
 const allit = finder.search({ seeds: ['happy'], constraints: { allit: 'silver' } });
 check('happy + alliterates with silver: all start with S', allit.length > 0 &&
