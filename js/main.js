@@ -1,9 +1,9 @@
 // App wiring: data loading, input handling, theme toggle.
-import { Lexicon } from './lexicon.js?v=31';
-import { analyzeText } from './analyze.js?v=31';
-import { Finder } from './finder.js?v=31';
-import { renderResults, renderFinderResults } from './ui.js?v=31';
-import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=31';
+import { Lexicon } from './lexicon.js?v=32';
+import { analyzeText } from './analyze.js?v=32';
+import { Finder } from './finder.js?v=32';
+import { renderResults, renderFinderResults } from './ui.js?v=32';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=32';
 
 const $ = (id) => document.getElementById(id);
 const els = {
@@ -199,7 +199,7 @@ function runFinder() {
   const seeds = groups.flat();
   const constraints = {};
   for (const [k, el] of Object.entries(constraintEls)) constraints[k] = el ? el.value : '';
-  constraints.wide = !!$('c-wide')?.checked;
+  constraints.reach = Number($('c-reach')?.value) || 1;
   constraints.stress = stressPat.join('');
   constraints.stressMode = stressPat.length ? stressMode : '';
   constraints.sl = slState.map((st) => ({
@@ -313,7 +313,12 @@ els.input?.addEventListener('input', queueRun);
 let finderTimer = null;
 const queueFinder = () => { clearTimeout(finderTimer); finderTimer = setTimeout(runFinder, 250); };
 els.seedInput?.addEventListener('input', queueFinder);
-$('c-wide')?.addEventListener('change', queueFinder);
+const REACH_LABELS = { 1: 'direct synonyms', 2: 'synonyms of synonyms', 3: 'three hops out', 4: 'four hops out' };
+function paintReach() {
+  const label = $('reach-label');
+  if (label) label.textContent = REACH_LABELS[$('c-reach')?.value] ?? 'direct synonyms';
+}
+$('c-reach')?.addEventListener('input', () => { paintReach(); queueFinder(); });
 els.slWord?.addEventListener('input', () => { rebuildSlChips(); queueFinder(); });
 
 // Stress-pattern builder: visual DUM/da chips instead of 1/0 notation.
@@ -372,8 +377,8 @@ for (const el of Object.values(constraintEls)) {
 els.finderClear?.addEventListener('click', () => {
   els.seedInput.value = '';
   els.slWord.value = '';
-  const wide = $('c-wide');
-  if (wide) wide.checked = false;
+  const reach = $('c-reach');
+  if (reach) { reach.value = '1'; paintReach(); }
   stressPat = [];
   stressMode = 'exact';
   renderStressChips();

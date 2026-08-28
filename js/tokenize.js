@@ -1,6 +1,6 @@
 // Tokenizer + sentence splitter. Tokens keep character offsets so the UI can
 // highlight the exact source text behind any finding.
-import { ABBREVIATIONS } from './wordlists.js?v=31';
+import { ABBREVIATIONS } from './wordlists.js?v=32';
 
 const TOKEN_RE = /[A-Za-zÀ-ɏ]+(?:['’-][A-Za-zÀ-ɏ]+)*|\d+(?:[.,]\d+)*|[.!?…]+|[,;:]|[—–]|-{2,}|["“”'‘’()\[\]]|\S/g;
 

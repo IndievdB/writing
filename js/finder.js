@@ -1,10 +1,10 @@
 // Word finder: search the lexicon by meaning (WordNet synonyms + reverse
 // dictionary over glosses) and by sound (alliteration, assonance, consonance,
 // rhyme, stress pattern, syllables, texture, origin, concreteness, rarity).
-import { analyzeWord } from './phonology.js?v=31';
-import { VOWELS } from './lexicon.js?v=31';
-import { classifyOrigin } from './etymology.js?v=31';
-import { FUNCTION_WORDS, IRREGULAR_PAST, UNSTRESSED_MONOSYLLABLES, DUAL_STRESS_MONOSYLLABLES } from './wordlists.js?v=31';
+import { analyzeWord } from './phonology.js?v=32';
+import { VOWELS } from './lexicon.js?v=32';
+import { classifyOrigin } from './etymology.js?v=32';
+import { FUNCTION_WORDS, IRREGULAR_PAST, UNSTRESSED_MONOSYLLABLES, DUAL_STRESS_MONOSYLLABLES } from './wordlists.js?v=32';
 
 // Stopwords for the definition-text index (function words + defining
 // vocabulary that appears in half of all glosses).
@@ -431,7 +431,7 @@ export class Finder {
 
   // ---- meaning search ------------------------------------------------------
 
-  seedCandidates(seeds, wide = false) {
+  seedCandidates(seeds, reach = 1) {
     const cand = new Map(); // word -> {score, matched:Set<seed>, reasons:Set}
     const bump = (word, seed, score, reason) => {
       if (seeds.includes(word)) return;
@@ -495,10 +495,32 @@ export class Finder {
               const anchored = vias.size >= 2 ||
                 (nMap && (nMap.has(seed) ||
                   [...nMap.keys()].some((k) => cur.has(k) && !vias.has(k))));
-              // Wide mode admits every strong two-hop chain, not just the
+              // Reach >= 2 admits every strong two-hop chain, not just the
               // triangle-anchored ones — more reach, some sense drift.
               if (anchored) bump(n, rawSeed, 0.35, `near “${rawSeed}” (via ${[...vias][0]})`);
-              else if (wide) bump(n, rawSeed, 0.25, `synonym of “${[...vias][0]}” (≈${rawSeed})`);
+              else if (reach >= 2) bump(n, rawSeed, 0.25, `synonym of “${[...vias][0]}” (≈${rawSeed})`);
+            }
+            // Deeper reach: breadth-first through strong forward links, with
+            // a decaying weight per hop and hub/frontier caps so polysemy
+            // can't snowball.
+            if (reach >= 3) {
+              const visited = new Set([seed, ...cur.keys(), ...hopVia.keys()]);
+              let frontier = [...hopVia.keys()];
+              for (let depth = 3; depth <= reach && frontier.length; depth++) {
+                const weight = depth === 3 ? 0.12 : 0.06;
+                const next = [];
+                for (const w of frontier) {
+                  const entry = this.curated.get(w);
+                  if (!entry || entry.size > 30) continue;
+                  for (const [n, w2] of entry) {
+                    if (w2 < 1.2 || visited.has(n)) continue;
+                    visited.add(n);
+                    bump(n, rawSeed, weight, `${depth} hops from “${rawSeed}” (via ${w})`);
+                    if (next.length < 400) next.push(n);
+                  }
+                }
+                frontier = next;
+              }
             }
           }
         }
@@ -865,9 +887,9 @@ export class Finder {
       const m = modHit(w);
       put(w, 1 + m * 1.5, m ? `synonym of “${headLemma}”, ${mod}-matching` : `synonym of “${headLemma}”`);
     }
-    // Wide mode: the head's synonyms-of-synonyms join the fallback tier,
+    // Reach >= 2: the head's synonyms-of-synonyms join the fallback tier,
     // below direct synonyms.
-    if (constraints.wide) {
+    if ((Number(constraints.reach) || (constraints.wide ? 2 : 1)) >= 2) {
       for (const [syn, wgt] of headEntry) {
         if (wgt < 1.2) continue;
         for (const [syn2, w2] of (posEntry(syn, wantPos) ?? new Map())) {
@@ -995,7 +1017,7 @@ export class Finder {
     };
 
     if (seeds.length) {
-      const cand = this.seedCandidates(seeds, !!constraints.wide);
+      const cand = this.seedCandidates(seeds, Number(constraints.reach) || (constraints.wide ? 2 : 1));
       for (const [word, c] of cand) consider(word, c);
     } else {
       if (!hasConstraints && !constraints.origin && !constraints.feel && !constraints.rarity) return [];
@@ -1017,7 +1039,7 @@ export class Finder {
       const kept = kind;
       kind = null;
       seeds = [...originalSeeds];
-      const cand = this.seedCandidates(seeds, !!constraints.wide);
+      const cand = this.seedCandidates(seeds, Number(constraints.reach) || (constraints.wide ? 2 : 1));
       for (const [word, c] of cand) consider(word, c);
       kind = kept;
     }

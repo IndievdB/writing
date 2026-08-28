@@ -90,15 +90,16 @@ check('beat words (this/no/not) only in stressed', ['this', 'no', 'not'].every((
   words(st1).slice(0, 8).join(','));
 check('dual words (that/some/what) in both', ['that', 'some', 'what'].every((w) => un1w.has(w) && st1w.has(w)));
 
-// Wide mode: synonyms of synonyms join the pool (at lower rank).
+// Reach: each level widens the pool; direct results keep the top ranks.
 const narrow = finder.search({ seeds: ['sad'] });
-const wideR = finder.search({ seeds: ['sad'], constraints: { wide: true } });
-check('wide returns more than narrow', wideR.length > narrow.length,
-  `${narrow.length} -> ${wideR.length}`);
-const narrowSet = new Set(words(narrow));
-check('narrow results all present in wide', words(narrow).every((w) => words(wideR).includes(w)));
-check('narrow top-5 unchanged by wide', words(narrow).slice(0, 5).join() === words(wideR).slice(0, 5).join(),
-  words(wideR).slice(0, 5).join(','));
+const r2 = finder.search({ seeds: ['sad'], constraints: { reach: 2 } });
+const r3 = finder.search({ seeds: ['sad'], constraints: { reach: 3 } });
+check('reach 2 > reach 1', r2.length > narrow.length, `${narrow.length} -> ${r2.length}`);
+check('reach 3 >= reach 2', r3.length >= r2.length, `${r2.length} -> ${r3.length}`);
+check('reach 1 results all present at reach 2', words(narrow).every((w) => words(r2).includes(w)));
+check('top-5 unchanged by reach', words(narrow).slice(0, 5).join() === words(r3).slice(0, 5).join(),
+  words(r3).slice(0, 5).join(','));
+check('wide:true still means reach 2', finder.search({ seeds: ['sad'], constraints: { wide: true } }).length === r2.length);
 
 // Alliteration: same opening sound as the given word.
 const allit = finder.search({ seeds: ['happy'], constraints: { allit: 'silver' } });

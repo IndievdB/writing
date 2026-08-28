@@ -6,7 +6,7 @@
 <title>Word Study</title>
 <meta name="description" content="Find words by meaning and sound — synonyms, alliteration, assonance, rhyme, stress pattern, texture — and hear your sentence's rhythm. No AI — pure phonology and dictionaries.">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>〜</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=31">
+<link rel="stylesheet" href="css/style.css?v=32">
 </head>
 <body>
 <header class="site-header">
@@ -22,8 +22,11 @@
     <label for="seed-input" class="visually-hidden">Meaning</label>
     <input id="seed-input" type="text" autocomplete="off" spellcheck="false" autofocus
       placeholder="Meaning — words or phrases, comma-separated: “young man”, “big, huge”, “walk slowly, amble”">
-    <label class="wide-toggle" title="Also include the synonyms of each result's synonyms — a wider net, with some drift in meaning">
-      <input type="checkbox" id="c-wide"> include synonyms of synonyms</label>
+    <div class="reach-row" title="How far to wander from the word: direct synonyms, their synonyms, and so on — each step adds reach and some drift in meaning">
+      <label for="c-reach">reach</label>
+      <input type="range" id="c-reach" min="1" max="4" step="1" value="1">
+      <span id="reach-label">direct synonyms</span>
+    </div>
     <p id="seed-def" class="seed-def" hidden></p>
     <div class="soundslike-row">
       <label class="sl-word-label">Sounds like
@@ -136,6 +139,6 @@
 
 </main>
 
-<script type="module" src="js/main.js?v=31"></script>
+<script type="module" src="js/main.js?v=32"></script>
 </body>
 </html>

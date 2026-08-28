@@ -424,11 +424,12 @@ td.num { font-variant-numeric: tabular-nums; }
 .chip-word { font-size: 0.98rem; }
 .chip-meta { font-size: 0.75rem; color: var(--muted); letter-spacing: 0.08em; }
 .spell-note { color: var(--muted); }
-.wide-toggle {
-  display: inline-flex; align-items: center; gap: 0.4rem;
-  margin-top: 0.35rem; font-size: 0.82rem; color: var(--ink-2); cursor: pointer;
+.reach-row {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin-top: 0.35rem; font-size: 0.82rem; color: var(--ink-2);
 }
-.wide-toggle input { accent-color: var(--accent); cursor: pointer; }
+.reach-row input[type="range"] { width: 110px; accent-color: var(--accent); cursor: pointer; }
+#reach-label { color: var(--muted); }
 .clear-models {
   border: 1px dashed var(--hairline); border-radius: 999px; background: none;
   color: var(--muted); font: inherit; font-size: 0.78rem;
