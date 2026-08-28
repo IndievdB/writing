@@ -1,9 +1,9 @@
 // App wiring: data loading, input handling, theme toggle.
-import { Lexicon } from './lexicon.js';
-import { analyzeText } from './analyze.js';
-import { Finder } from './finder.js';
-import { renderResults, renderFinderResults } from './ui.js';
-import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js';
+import { Lexicon } from './lexicon.js?v=31';
+import { analyzeText } from './analyze.js?v=31';
+import { Finder } from './finder.js?v=31';
+import { renderResults, renderFinderResults } from './ui.js?v=31';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=31';
 
 const $ = (id) => document.getElementById(id);
 const els = {

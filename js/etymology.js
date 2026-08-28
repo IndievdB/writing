@@ -5,8 +5,8 @@
 import {
   FUNCTION_WORDS, GERMANIC_COMMON, LATINATE_COMMON, LATINATE_SUFFIXES,
   LATINATE_PREFIXES, GERMANIC_SUFFIXES, LATINATE_SWAPS,
-} from './wordlists.js';
-import { ETYM_GERMANIC, ETYM_LATINATE } from './etymology-data.js';
+} from './wordlists.js?v=31';
+import { ETYM_GERMANIC, ETYM_LATINATE } from './etymology-data.js?v=31';
 
 // Returns { origin: 'latinate'|'germanic'|'neutral', confidence: 0..1, swap }
 export function classifyOrigin(word, { syllableCount = null, freqRank = null } = {}) {

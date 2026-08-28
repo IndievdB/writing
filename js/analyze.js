@@ -5,13 +5,13 @@
 // calibrated band (some clash, some Latinate, some length variety is GOOD —
 // the target is a band, not zero). Findings are generated only where a metric
 // crosses a threshold, and every finding is anchored to exact source spans.
-import { tokenize, splitSentences } from './tokenize.js';
-import { analyzeWord } from './phonology.js';
-import { classifyOrigin } from './etymology.js';
+import { tokenize, splitSentences } from './tokenize.js?v=31';
+import { analyzeWord } from './phonology.js?v=31';
+import { classifyOrigin } from './etymology.js?v=31';
 import {
   FUNCTION_WORDS, COORDINATORS, SUBORDINATORS, BE_FORMS, WEAK_VERBS, FILLERS,
   IRREGULAR_PARTICIPLES, SUBJECT_PRONOUNS,
-} from './wordlists.js';
+} from './wordlists.js?v=31';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers

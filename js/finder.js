@@ -1,10 +1,10 @@
 // Word finder: search the lexicon by meaning (WordNet synonyms + reverse
 // dictionary over glosses) and by sound (alliteration, assonance, consonance,
 // rhyme, stress pattern, syllables, texture, origin, concreteness, rarity).
-import { analyzeWord } from './phonology.js';
-import { VOWELS } from './lexicon.js';
-import { classifyOrigin } from './etymology.js';
-import { FUNCTION_WORDS, IRREGULAR_PAST, UNSTRESSED_MONOSYLLABLES, DUAL_STRESS_MONOSYLLABLES } from './wordlists.js';
+import { analyzeWord } from './phonology.js?v=31';
+import { VOWELS } from './lexicon.js?v=31';
+import { classifyOrigin } from './etymology.js?v=31';
+import { FUNCTION_WORDS, IRREGULAR_PAST, UNSTRESSED_MONOSYLLABLES, DUAL_STRESS_MONOSYLLABLES } from './wordlists.js?v=31';
 
 // Stopwords for the definition-text index (function words + defining
 // vocabulary that appears in half of all glosses).
@@ -864,6 +864,18 @@ export class Finder {
     for (const w of headSyns) {
       const m = modHit(w);
       put(w, 1 + m * 1.5, m ? `synonym of “${headLemma}”, ${mod}-matching` : `synonym of “${headLemma}”`);
+    }
+    // Wide mode: the head's synonyms-of-synonyms join the fallback tier,
+    // below direct synonyms.
+    if (constraints.wide) {
+      for (const [syn, wgt] of headEntry) {
+        if (wgt < 1.2) continue;
+        for (const [syn2, w2] of (posEntry(syn, wantPos) ?? new Map())) {
+          if (w2 < 1.2 || headEntry.has(syn2)) continue;
+          const m = modHit(syn2);
+          put(syn2, 0.7 + m * 1.5, `synonym of “${syn}” (≈${headLemma})`);
+        }
+      }
     }
 
     const { tests, soft } = this.compileConstraints(constraints);
