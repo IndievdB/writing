@@ -1,14 +1,15 @@
 // App wiring: data loading, input handling, theme toggle.
-import { Lexicon } from './lexicon.js?v=33';
-import { analyzeText } from './analyze.js?v=33';
-import { Finder } from './finder.js?v=33';
-import { renderResults, renderFinderResults } from './ui.js?v=33';
-import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=33';
+import { Lexicon } from './lexicon.js?v=34';
+import { analyzeText } from './analyze.js?v=34';
+import { Finder } from './finder.js?v=34';
+import { renderResults, renderFinderResults } from './ui.js?v=34';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=34';
 
 const $ = (id) => document.getElementById(id);
 const els = {
   input: $('text-input'), status: $('status'), results: $('results'),
   rhythmStrip: $('rhythm-strip'),
+  varietyTable: $('variety-table'), varietyNotes: $('variety-notes'),
   seedInput: $('seed-input'), finderStatus: $('finder-status'),
   finderResults: $('finder-results'), finderClear: $('finder-clear'),
   chipLegend: $('chip-legend'),

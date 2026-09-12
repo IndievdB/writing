@@ -215,6 +215,23 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-c
 .prosody-verdict {
   margin-top: 0.25rem; font-size: 0.78rem; color: var(--muted);
 }
+
+/* ---------- sentence variety ---------- */
+.variety-notes { margin: 0.3rem 0 0.7rem; font-size: 0.85rem; }
+.variety-mix { color: var(--ink-2); margin-bottom: 0.25rem; }
+.variety-tip { color: var(--accent); margin-top: 0.15rem; }
+.variety-table { display: flex; flex-direction: column; }
+.variety-row {
+  display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem;
+  padding: 0.5rem 0; border-top: 1px solid var(--hairline);
+}
+.variety-row:first-child { border-top: none; }
+.variety-sentence { font-size: 0.92rem; color: var(--ink); }
+.variety-note { font-size: 0.88rem; color: var(--ink-2); }
+.variety-meta { font-size: 0.78rem; color: var(--muted); margin-top: 0.15rem; }
+@media (max-width: 560px) {
+  .variety-row { grid-template-columns: 1fr; gap: 0.25rem; }
+}
 .tap-speed-label {
   display: inline-flex; align-items: center; gap: 0.45rem;
   font-size: 0.8rem; color: var(--ink-2);

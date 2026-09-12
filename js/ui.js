@@ -1,11 +1,97 @@
 // Rendering layer: takes an analysis result and paints the page.
-import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=33';
-import { VOWELS } from './lexicon.js?v=33';
+import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=34';
+import { VOWELS } from './lexicon.js?v=34';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 export function renderResults(result, els, rhythmOpts) {
   renderRhythm(result, els.rhythmStrip, rhythmOpts);
+  renderVariety(result, els);
+}
+
+// ---------------------------------------------------------------------------
+// Sentence variety: per-sentence classification table (function, clause
+// anatomy, opener) plus paragraph-scale monotony diagnostics.
+
+const structureKind = (v) => v.structure.startsWith('fragment') ? 'fragment'
+  : v.indep >= 2 && v.dep ? 'compound-complex'
+  : v.indep >= 2 ? 'compound' : v.dep ? 'complex' : 'simple';
+
+function varietyNotes(sentences) {
+  const notes = [];
+  const vs = sentences.map((s) => s.variety);
+  const lens = vs.map((v) => v.words);
+  if (vs.length < 3) return notes;
+  const lo = Math.min(...lens), hi = Math.max(...lens);
+  if (hi - lo <= 5 && hi > 4) {
+    notes.push(`sentence lengths barely vary (${lo}–${hi} words) — try one short punch or one long roller`);
+  }
+  let run = 1;
+  for (let i = 1; i < lens.length; i++) {
+    if (Math.abs(lens[i] - lens[i - 1]) <= 3) { run++; if (run === 4) { notes.push('four sentences of nearly equal length in a row — vary the rhythm'); break; } }
+    else run = 1;
+  }
+  if (vs.length >= 4 && vs.every((v) => v.func === 'declarative')) {
+    notes.push('every sentence is a statement — a question or exclamation can re-engage the reader');
+  }
+  if (vs.every((v) => structureKind(v) === 'simple')) {
+    notes.push('every sentence is a single independent clause — join two with a conjunction, or hang a dependent clause off one');
+  } else if (vs.length >= 4 && vs.every((v) => structureKind(v) === 'compound')) {
+    notes.push('every sentence is compound — break one apart, or subordinate a clause instead of coordinating it');
+  }
+  let orun = 1;
+  for (let i = 1; i < vs.length; i++) {
+    if (vs[i].opener === 'opens with the subject' && vs[i - 1].opener === vs[i].opener) {
+      orun++;
+      if (orun === 4) { notes.push('four sentences in a row open with the subject — front a phrase, an adverb, or a dependent clause'); break; }
+    } else orun = 1;
+  }
+  const firsts = new Map();
+  for (const v of vs) if (v.firstWord) firsts.set(v.firstWord, (firsts.get(v.firstWord) ?? 0) + 1);
+  for (const [w, n] of firsts) {
+    if (n >= 3) notes.push(`${n} sentences begin with “${w}” — vary the opening word`);
+  }
+  const frags = vs.filter((v) => structureKind(v) === 'fragment').length;
+  if (frags >= 2 && frags / vs.length > 0.34) {
+    notes.push(`${frags} of ${vs.length} sentences are fragments — powerful in small doses, choppy in bulk`);
+  }
+  return notes;
+}
+
+function renderVariety(result, els) {
+  if (!els.varietyTable) return;
+  els.varietyTable.innerHTML = '';
+  const vs = result.sentences.map((s) => s.variety);
+  // Mix summary.
+  const counts = new Map();
+  for (const v of vs) counts.set(structureKind(v), (counts.get(structureKind(v)) ?? 0) + 1);
+  const lens = vs.map((v) => v.words);
+  const mix = [...counts.entries()].map(([k, n]) => `${n} ${k}`).join(' · ');
+  const summary = vs.length >= 2
+    ? `${mix} — lengths ${Math.min(...lens)}–${Math.max(...lens)} words`
+    : '';
+  const notes = varietyNotes(result.sentences);
+  if (els.varietyNotes) {
+    els.varietyNotes.innerHTML =
+      (summary ? `<div class="variety-mix">${esc(summary)}</div>` : '') +
+      notes.map((n) => `<div class="variety-tip">→ ${esc(n)}</div>`).join('');
+    els.varietyNotes.hidden = !summary && !notes.length;
+  }
+  for (const s of result.sentences) {
+    const first = s.tokens[0], last = s.tokens[s.tokens.length - 1];
+    const text = result.text.slice(first.start, last.end).trim();
+    const v = s.variety;
+    const row = document.createElement('div');
+    row.className = 'variety-row';
+    const meta = [
+      v.func !== 'declarative' ? v.func : null,
+      v.opener !== 'opens with the subject' ? v.opener : null,
+      `${v.words} word${v.words === 1 ? '' : 's'}`,
+    ].filter(Boolean).join(' · ');
+    row.innerHTML = `<div class="variety-sentence">${esc(text)}</div>` +
+      `<div class="variety-note"><i>${esc(v.structure)}</i><div class="variety-meta">${esc(meta)}</div></div>`;
+    els.varietyTable.appendChild(row);
+  }
 }
 
 // ---------------------------------------------------------------------------

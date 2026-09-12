@@ -5,13 +5,13 @@
 // calibrated band (some clash, some Latinate, some length variety is GOOD —
 // the target is a band, not zero). Findings are generated only where a metric
 // crosses a threshold, and every finding is anchored to exact source spans.
-import { tokenize, splitSentences } from './tokenize.js?v=33';
-import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=33';
-import { classifyOrigin } from './etymology.js?v=33';
+import { tokenize, splitSentences } from './tokenize.js?v=34';
+import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=34';
+import { classifyOrigin } from './etymology.js?v=34';
 import {
   FUNCTION_WORDS, COORDINATORS, SUBORDINATORS, BE_FORMS, WEAK_VERBS, FILLERS,
   IRREGULAR_PARTICIPLES, SUBJECT_PRONOUNS,
-} from './wordlists.js?v=33';
+} from './wordlists.js?v=34';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers
@@ -160,6 +160,119 @@ function buildSyllables(toks, ann) {
     });
   }
   return sylls;
+}
+
+// ---------------------------------------------------------------------------
+// Sentence variety: function (declarative / question / command / exclamation),
+// clause anatomy ("two independent clauses joined by and"), and how the
+// sentence opens. Heuristic clause segmentation over resolved POS: clauses
+// close at subordinators, relatives, and coordinators or commas that are
+// followed by a fresh subject + verb; shared-subject compound predicates
+// ("went out and played") stay one clause.
+
+const RELATIVES = new Set(['who', 'whom', 'whose', 'which']);
+const WH_WORDS = new Set(['why', 'how', 'what', 'where', 'when', 'who', 'whose', 'which']);
+const NUMS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine'];
+const numWord = (n) => NUMS[n] ?? String(n);
+
+function classifyVariety(toks, ann) {
+  const terminal = [...toks].reverse().find((t) => t.kind === 'terminal')?.value?.slice(-1) ?? '.';
+  let func = 'declarative';
+  if (terminal === '?') func = 'interrogative';
+  else if (terminal === '!') func = 'exclamation';
+  else if (ann.length && (ann[0].pos === 'V' || ['please', "don't", "let's"].includes(ann[0].lower))) func = 'imperative';
+  else if (ann.length && ann[0].posSet.includes('V') && !FUNCTION_WORDS.has(ann[0].lower) &&
+    !ann.slice(1).some((a) => a.pos === 'V' || a.pos === 'M')) {
+    // "Stop right there." — the opener resolves noun-first, but with no other
+    // finite verb in the sentence the verb-capable opener is the command.
+    func = 'imperative';
+  }
+
+  const seq = [];
+  let wi = 0;
+  for (const t of toks) {
+    if (t.kind === 'word' || t.kind === 'number') seq.push({ word: true, a: ann[wi++] });
+    else if (t.kind === 'pause') seq.push({ word: false });
+  }
+  const isSubj = (a) => ['O', 'N', 'D'].includes(a.pos);
+  const isVerb = (a) => a.pos === 'V' || a.pos === 'M';
+  // Does a fresh clause (a subject before its verb) start at position i?
+  const startsClause = (i) => {
+    let sawSubj = false;
+    for (let j = i; j < seq.length; j++) {
+      const it = seq[j];
+      if (!it.word) return false;
+      if (isVerb(it.a)) return sawSubj;
+      if (isSubj(it.a)) sawSubj = true;
+    }
+    return false;
+  };
+
+  let indep = 0, dep = 0, depFirst = false, closed = 0, skipVerb = false;
+  const joiners = [];
+  let cur = { subj: false, verb: func === 'imperative', dep: false };
+  const complete = () => cur.verb && (cur.subj || (func === 'imperative' && closed === 0));
+  const close = () => {
+    if (!complete()) return;
+    if (cur.dep) { dep++; if (closed === 0) depFirst = true; } else indep++;
+    closed++;
+  };
+  for (let i = 0; i < seq.length; i++) {
+    const it = seq[i];
+    if (!it.word) { // comma-grade pause
+      // A coordinator right after the comma will close the clause itself and
+      // record the joiner ("…, and there were…"), so hold off here.
+      const next = seq[i + 1];
+      const nextIsCoord = next?.word && next.a.pos === 'C';
+      if (!nextIsCoord && complete() && startsClause(i + 1)) {
+        close(); cur = { subj: false, verb: false, dep: false };
+      }
+      continue;
+    }
+    const a = it.a, w = a.lower;
+    if (i === 0 && SUBORDINATORS.has(w) && func !== 'interrogative') { cur.dep = true; continue; }
+    if (i > 0 && SUBORDINATORS.has(w) && complete()) {
+      close(); cur = { subj: false, verb: false, dep: true }; continue;
+    }
+    if ((RELATIVES.has(w) || w === 'that') && cur.subj) {
+      if (complete()) { close(); cur = { subj: true, verb: false, dep: true }; continue; }
+      // Nested pre-verb relative ("the man who ran ate"): count the relative
+      // clause, attribute its verb to it, keep the outer clause open.
+      if (RELATIVES.has(w)) { dep++; skipVerb = true; continue; }
+    }
+    if (a.pos === 'C' && complete() && startsClause(i + 1)) {
+      close(); joiners.push(w); cur = { subj: false, verb: false, dep: false }; continue;
+    }
+    if (isVerb(a)) { if (skipVerb) skipVerb = false; else cur.verb = true; }
+    else if (!cur.verb && isSubj(a)) cur.subj = true;
+  }
+  close();
+
+  const plural = (n, s) => `${numWord(n)} ${s}${n > 1 ? 's' : ''}`;
+  let structure;
+  if (!indep && !dep) structure = 'fragment';
+  else if (!indep) structure = 'fragment — a dependent clause alone';
+  else {
+    const ind = plural(indep, 'independent clause') +
+      (indep > 1 ? (joiners.length ? ` joined by ${[...new Set(joiners)].join(' and ')}` : ' set off by commas') : '');
+    const dp = dep ? plural(dep, 'dependent clause') : null;
+    structure = !dp ? ind : depFirst ? `${dp}, ${ind}` : `${ind}, ${dp}`;
+  }
+
+  let opener = 'opens with the subject';
+  const first = ann[0];
+  if (first) {
+    const w = first.lower;
+    if (func === 'interrogative' && (WH_WORDS.has(w) || isVerb(first))) opener = `opens with “${w}” (inverted question)`;
+    else if (func === 'exclamation' && ['what', 'how'].includes(w)) opener = `opens with “${w}” (exclamatory)`;
+    else if (SUBORDINATORS.has(w)) opener = 'opens with a dependent clause';
+    else if (first.pos === 'C') opener = 'opens with a conjunction';
+    else if (first.pos === 'P') opener = 'opens with a prepositional phrase';
+    else if (first.pos === 'R') opener = 'opens with an adverb';
+    else if (func === 'imperative' && first.pos === 'V') opener = 'opens with the bare verb';
+    else if (first.pos === 'V' && /(ing|ed)$/.test(w)) opener = 'opens with a participial phrase';
+  }
+  return { func, structure, opener, words: ann.length, firstWord: ann[0]?.lower ?? '', indep, dep };
 }
 
 function span(a) { return { start: a.token.start, end: a.token.end }; }
@@ -833,6 +946,7 @@ function analyzeSentence(toks, sentenceIndex, lexicon) {
 
   return {
     tokens: toks, ann, sylls, clauses, metrics, findings, marks,
+    variety: classifyVariety(toks, ann),
     stats: { nWords, nSyll, content: content.length },
   };
 }
