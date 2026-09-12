@@ -1,7 +1,7 @@
 // Rendering layer: takes an analysis result and paints the page.
-import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=37';
-import { VOWELS } from './lexicon.js?v=37';
-import { STRUCTURES, STRUCTURE_CATS, detectStructures } from './structures.js?v=37';
+import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=38';
+import { VOWELS } from './lexicon.js?v=38';
+import { STRUCTURES, STRUCTURE_CATS, detectStructures } from './structures.js?v=38';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -13,6 +13,8 @@ export function renderResults(result, els, rhythmOpts) {
 // ---------------------------------------------------------------------------
 // Sentence variety: per-sentence classification table (function, clause
 // anatomy, opener) plus paragraph-scale monotony diagnostics.
+
+const FUNC_NAMES = { declarative: 'statement', interrogative: 'question', exclamation: 'exclamation', imperative: 'command' };
 
 const structureKind = (v) => v.structure.startsWith('fragment') ? 'fragment'
   : v.indep >= 2 && v.dep ? 'compound-complex'
@@ -113,11 +115,13 @@ function renderVariety(result, els) {
     for (const t of tags) shapeCounts.set(t, (shapeCounts.get(t) ?? 0) + 1);
     const row = document.createElement('div');
     row.className = 'variety-row';
+    // Every row always shows function + opener, so runs the notes point at
+    // ("four sentences in a row open with the subject") are visible per row.
     const meta = [
-      v.func !== 'declarative' ? v.func : null,
-      v.opener !== 'opens with the subject' ? v.opener : null,
+      FUNC_NAMES[v.func] ?? v.func,
+      v.opener,
       `${v.words} word${v.words === 1 ? '' : 's'}`,
-    ].filter(Boolean).join(' · ');
+    ].join(' · ');
     row.innerHTML = `<div class="variety-sentence">${esc(text)}</div>` +
       `<div class="variety-note"><i>${esc(v.structure)}</i>` +
       (tags.length ? `<div class="variety-tags">${tags.map((t) => `<span class="shape-tag">[${esc(t)}]</span>`).join(' ')}</div>` : '') +

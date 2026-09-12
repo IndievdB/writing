@@ -5,13 +5,13 @@
 // calibrated band (some clash, some Latinate, some length variety is GOOD —
 // the target is a band, not zero). Findings are generated only where a metric
 // crosses a threshold, and every finding is anchored to exact source spans.
-import { tokenize, splitSentences } from './tokenize.js?v=37';
-import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=37';
-import { classifyOrigin } from './etymology.js?v=37';
+import { tokenize, splitSentences } from './tokenize.js?v=38';
+import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=38';
+import { classifyOrigin } from './etymology.js?v=38';
 import {
   FUNCTION_WORDS, COORDINATORS, SUBORDINATORS, BE_FORMS, WEAK_VERBS, FILLERS,
   IRREGULAR_PARTICIPLES, SUBJECT_PRONOUNS,
-} from './wordlists.js?v=37';
+} from './wordlists.js?v=38';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers
@@ -182,7 +182,13 @@ function classifyVariety(toks, ann) {
   let func = 'declarative';
   if (terminal === '?') func = 'interrogative';
   else if (terminal === '!') func = 'exclamation';
-  else if (ann.length && (ann[0].pos === 'V' || ['please', "don't", "let's"].includes(ann[0].lower))) func = 'imperative';
+  else if (ann.length && (ann[0].pos === 'V' || ['please', "don't", "let's"].includes(ann[0].lower)) &&
+    // "Crouching in the ferns, he waited." opens with a participle, not a
+    // command — a verb-first sentence is imperative only when the opener
+    // isn't an -ing form with its own finite verb later on.
+    !(ann[0].lower.endsWith('ing') && ann.slice(1).some((a) => a.pos === 'V' || a.pos === 'M'))) {
+    func = 'imperative';
+  }
   else if (ann.length && ann[0].posSet.includes('V') && !FUNCTION_WORDS.has(ann[0].lower) &&
     !ann.slice(1).some((a) => a.pos === 'V' || a.pos === 'M')) {
     // "Stop right there." — the opener resolves noun-first, but with no other

@@ -1,6 +1,6 @@
 // Lexicon: wraps the four data files (phonemes, POS, concreteness, frequency)
 // and provides a grapheme-to-phoneme fallback for out-of-vocabulary words.
-import { FUNCTION_WORDS } from './wordlists.js?v=37';
+import { FUNCTION_WORDS } from './wordlists.js?v=38';
 
 export const VOWELS = new Set([
   'AA', 'AE', 'AH', 'AO', 'AW', 'AY', 'EH', 'ER', 'EY', 'IH', 'IY', 'OW',
