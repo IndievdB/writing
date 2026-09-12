@@ -216,6 +216,32 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-c
   margin-top: 0.25rem; font-size: 0.78rem; color: var(--muted);
 }
 
+/* ---------- structure gallery ---------- */
+.gallery-panel { margin-top: 1rem; }
+.structure-gallery details {
+  border-top: 1px solid var(--hairline); padding: 0.35rem 0;
+}
+.structure-gallery summary {
+  cursor: pointer; font-weight: 600; color: var(--ink-2); font-size: 0.9rem;
+  padding: 0.2rem 0;
+}
+.gal-row { padding: 0.4rem 0 0.4rem 0.9rem; }
+.gal-head { display: flex; align-items: center; gap: 0.5rem; }
+.shape-tag {
+  font-family: ui-monospace, monospace; font-size: 0.74rem; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 9%, var(--page));
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--hairline));
+  border-radius: 5px; padding: 0.05rem 0.35rem; white-space: nowrap;
+}
+.gal-badge {
+  font-size: 0.72rem; color: var(--page); background: var(--accent);
+  border-radius: 999px; padding: 0.06rem 0.5rem;
+}
+.gal-row.gal-used .shape-tag { border-color: var(--accent); }
+.gal-ex { font-size: 0.88rem; color: var(--ink); margin-top: 0.15rem; }
+.gal-note { font-size: 0.78rem; color: var(--muted); font-style: italic; margin-top: 0.1rem; }
+.variety-tags { margin-top: 0.15rem; display: flex; flex-wrap: wrap; gap: 0.25rem; }
+
 /* ---------- sentence variety ---------- */
 .variety-notes { margin: 0.3rem 0 0.7rem; font-size: 0.85rem; }
 .variety-mix { color: var(--ink-2); margin-bottom: 0.25rem; }

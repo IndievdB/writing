@@ -1,6 +1,7 @@
 // Rendering layer: takes an analysis result and paints the page.
-import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=35';
-import { VOWELS } from './lexicon.js?v=35';
+import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=36';
+import { VOWELS } from './lexicon.js?v=36';
+import { STRUCTURES, STRUCTURE_CATS, detectStructures } from './structures.js?v=36';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -17,6 +18,8 @@ const structureKind = (v) => v.structure.startsWith('fragment') ? 'fragment'
   : v.indep >= 2 && v.dep ? 'compound-complex'
   : v.indep >= 2 ? 'compound' : v.dep ? 'complex' : 'simple';
 
+// Observations only — what varies and what doesn't; the structure gallery
+// below is where the author browses what a sentence could be instead.
 function varietyNotes(sentences) {
   const notes = [];
   const vs = sentences.map((s) => s.variety);
@@ -24,36 +27,36 @@ function varietyNotes(sentences) {
   if (vs.length < 3) return notes;
   const lo = Math.min(...lens), hi = Math.max(...lens);
   if (hi - lo <= 5 && hi > 4) {
-    notes.push(`sentence lengths barely vary (${lo}–${hi} words) — try one short punch or one long roller`);
+    notes.push(`sentence lengths barely vary (${lo}–${hi} words)`);
   }
   let run = 1;
   for (let i = 1; i < lens.length; i++) {
-    if (Math.abs(lens[i] - lens[i - 1]) <= 3) { run++; if (run === 4) { notes.push('four sentences of nearly equal length in a row — vary the rhythm'); break; } }
+    if (Math.abs(lens[i] - lens[i - 1]) <= 3) { run++; if (run === 4) { notes.push('four sentences of nearly equal length in a row'); break; } }
     else run = 1;
   }
   if (vs.length >= 4 && vs.every((v) => v.func === 'declarative')) {
-    notes.push('every sentence is a statement — a question or exclamation can re-engage the reader');
+    notes.push('every sentence is a statement');
   }
   if (vs.every((v) => structureKind(v) === 'simple')) {
-    notes.push('every sentence is a single independent clause — join two with a conjunction, or hang a dependent clause off one');
+    notes.push('every sentence is a single independent clause');
   } else if (vs.length >= 4 && vs.every((v) => structureKind(v) === 'compound')) {
-    notes.push('every sentence is compound — break one apart, or subordinate a clause instead of coordinating it');
+    notes.push('every sentence is compound');
   }
   let orun = 1;
   for (let i = 1; i < vs.length; i++) {
     if (vs[i].opener === 'opens with the subject' && vs[i - 1].opener === vs[i].opener) {
       orun++;
-      if (orun === 4) { notes.push('four sentences in a row open with the subject — front a phrase, an adverb, or a dependent clause'); break; }
+      if (orun === 4) { notes.push('four sentences in a row open with the subject'); break; }
     } else orun = 1;
   }
   const firsts = new Map();
   for (const v of vs) if (v.firstWord) firsts.set(v.firstWord, (firsts.get(v.firstWord) ?? 0) + 1);
   for (const [w, n] of firsts) {
-    if (n >= 3) notes.push(`${n} sentences begin with “${w}” — vary the opening word`);
+    if (n >= 3) notes.push(`${n} sentences begin with “${w}”`);
   }
   const frags = vs.filter((v) => structureKind(v) === 'fragment').length;
   if (frags >= 2 && frags / vs.length > 0.34) {
-    notes.push(`${frags} of ${vs.length} sentences are fragments — powerful in small doses, choppy in bulk`);
+    notes.push(`${frags} of ${vs.length} sentences are fragments`);
   }
   return notes;
 }
@@ -77,10 +80,13 @@ function renderVariety(result, els) {
       notes.map((n) => `<div class="variety-tip">→ ${esc(n)}</div>`).join('');
     els.varietyNotes.hidden = !summary && !notes.length;
   }
+  const shapeCounts = new Map();
   for (const s of result.sentences) {
     const first = s.tokens[0], last = s.tokens[s.tokens.length - 1];
     const text = result.text.slice(first.start, last.end).trim();
     const v = s.variety;
+    const tags = detectStructures(text, v);
+    for (const t of tags) shapeCounts.set(t, (shapeCounts.get(t) ?? 0) + 1);
     const row = document.createElement('div');
     row.className = 'variety-row';
     const meta = [
@@ -89,8 +95,50 @@ function renderVariety(result, els) {
       `${v.words} word${v.words === 1 ? '' : 's'}`,
     ].filter(Boolean).join(' · ');
     row.innerHTML = `<div class="variety-sentence">${esc(text)}</div>` +
-      `<div class="variety-note"><i>${esc(v.structure)}</i><div class="variety-meta">${esc(meta)}</div></div>`;
+      `<div class="variety-note"><i>${esc(v.structure)}</i>` +
+      (tags.length ? `<div class="variety-tags">${tags.map((t) => `<span class="shape-tag">[${esc(t)}]</span>`).join(' ')}</div>` : '') +
+      `<div class="variety-meta">${esc(meta)}</div></div>`;
     els.varietyTable.appendChild(row);
+  }
+  if (els.gallery) updateGalleryCounts(els.gallery, shapeCounts);
+}
+
+// ---------------------------------------------------------------------------
+// Structure gallery: the full shape library, browsable by category, with
+// "in your text" badges showing which shapes the current writing already
+// uses — the author sees the unused variations for themselves.
+
+export function buildGallery(container) {
+  if (!container) return;
+  container.innerHTML = '';
+  STRUCTURE_CATS.forEach((cat, i) => {
+    const entries = STRUCTURES.filter((s) => s.cat === cat);
+    const det = document.createElement('details');
+    if (i === 0) det.open = true;
+    const sum = document.createElement('summary');
+    sum.textContent = `${cat} (${entries.length})`;
+    det.appendChild(sum);
+    for (const e of entries) {
+      const row = document.createElement('div');
+      row.className = 'gal-row';
+      row.dataset.name = e.name;
+      row.innerHTML = `<div class="gal-head"><span class="shape-tag">[${esc(e.name)}]</span>` +
+        `<span class="gal-badge" hidden></span></div>` +
+        `<div class="gal-ex">${esc(e.ex)}</div>` +
+        (e.note ? `<div class="gal-note">${esc(e.note)}</div>` : '');
+      det.appendChild(row);
+    }
+    container.appendChild(det);
+  });
+}
+
+function updateGalleryCounts(container, counts) {
+  for (const row of container.querySelectorAll('.gal-row')) {
+    const badge = row.querySelector('.gal-badge');
+    const n = counts.get(row.dataset.name) ?? 0;
+    badge.hidden = n === 0;
+    badge.textContent = n ? `in your text ×${n}` : '';
+    row.classList.toggle('gal-used', n > 0);
   }
 }
 

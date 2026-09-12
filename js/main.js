@@ -1,15 +1,16 @@
 // App wiring: data loading, input handling, theme toggle.
-import { Lexicon } from './lexicon.js?v=35';
-import { analyzeText } from './analyze.js?v=35';
-import { Finder } from './finder.js?v=35';
-import { renderResults, renderFinderResults } from './ui.js?v=35';
-import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=35';
+import { Lexicon } from './lexicon.js?v=36';
+import { analyzeText } from './analyze.js?v=36';
+import { Finder } from './finder.js?v=36';
+import { renderResults, renderFinderResults, buildGallery } from './ui.js?v=36';
+import { systemAvailable, listSystemVoices, speakSystem, stopSystem, NeuralTTS, NEURAL_VOICES, PiperTTS, PIPER_VOICES, clearModelCaches, storageUsage } from './speech.js?v=36';
 
 const $ = (id) => document.getElementById(id);
 const els = {
   input: $('text-input'), status: $('status'), results: $('results'),
   rhythmStrip: $('rhythm-strip'),
   varietyTable: $('variety-table'), varietyNotes: $('variety-notes'),
+  gallery: $('structure-gallery'),
   seedInput: $('seed-input'), finderStatus: $('finder-status'),
   finderResults: $('finder-results'), finderClear: $('finder-clear'),
   chipLegend: $('chip-legend'),
@@ -61,6 +62,8 @@ async function loadData() {
   }
 }
 
+buildGallery(els.gallery);
+
 // Prosody lenses on the rhythm strip, individually toggleable.
 const rhythmLenses = { dur: true, pitch: true, arcs: true, vowels: true };
 for (const k of Object.keys(rhythmLenses)) {
@@ -87,7 +90,13 @@ function toggleStress(key) {
 function run() {
   if (!lexicon.ready) return;
   const text = els.input.value;
-  if (!text.trim()) { els.results.hidden = true; return; }
+  if (!text.trim()) {
+    els.results.hidden = true;
+    // No text: the gallery keeps its examples but drops stale usage badges.
+    for (const b of els.gallery?.querySelectorAll('.gal-badge') ?? []) b.hidden = true;
+    for (const r of els.gallery?.querySelectorAll('.gal-used') ?? []) r.classList.remove('gal-used');
+    return;
+  }
   if (text !== overriddenText) { stressOverrides.clear(); overriddenText = text; }
   lastResult = analyzeText(text, lexicon);
   renderResults(lastResult, els, { overrides: stressOverrides, onToggle: toggleStress, lenses: rhythmLenses });
