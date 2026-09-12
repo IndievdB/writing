@@ -1,6 +1,6 @@
 // Rendering layer: takes an analysis result and paints the page.
-import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=34';
-import { VOWELS } from './lexicon.js?v=34';
+import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=35';
+import { VOWELS } from './lexicon.js?v=35';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -102,7 +102,7 @@ const ARC_COLORS = ['#d97706', '#0ea5e9', '#a855f7', '#10b981', '#ef4444', '#8b5
 
 // Nucleus brightness: front vowels bright (gold), back vowels dark (blue).
 function vowelColor(nucleus) {
-  if (!nucleus) return 'transparent';
+  if (!nucleus) return '';
   if (BRIGHT_VOWELS.has(nucleus)) return 'hsl(45 85% 52%)';
   if (DARK_VOWELS.has(nucleus)) return 'hsl(230 62% 58%)';
   return 'hsl(0 0% 58%)';
@@ -241,7 +241,12 @@ function renderRhythm(result, container, { overrides = null, onToggle = null, le
         else if (ov !== undefined) b.classList.add('ovr');
         if (patter.has(gi)) b.classList.add('patter');
         if (lenses.dur) b.style.width = `${5 + Math.round((syl.dur ?? 1) * 6)}px`;
-        if (lenses.vowels) b.style.borderBottom = `4px solid ${vowelColor(syl.nucleus)}`;
+        // Vowel color fills the whole bar — stress is already legible from
+        // height, so the fill is free to carry the vowel.
+        if (lenses.vowels && ov !== 'skip') {
+          const c = vowelColor(syl.nucleus);
+          if (c) b.style.background = c;
+        }
         const pos = k === 0 ? 'first' : k === sylls.length - 1 ? 'last' : '';
         if (pos && clashSet.has(`${wi}:${pos}`)) b.classList.add('clash');
         if (sylls.length === 1 && (clashSet.has(`${wi}:first`) || clashSet.has(`${wi}:last`))) {
