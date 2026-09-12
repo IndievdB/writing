@@ -1,10 +1,10 @@
 // Word finder: search the lexicon by meaning (WordNet synonyms + reverse
 // dictionary over glosses) and by sound (alliteration, assonance, consonance,
 // rhyme, stress pattern, syllables, texture, origin, concreteness, rarity).
-import { analyzeWord } from './phonology.js?v=38';
-import { VOWELS } from './lexicon.js?v=38';
-import { classifyOrigin } from './etymology.js?v=38';
-import { FUNCTION_WORDS, IRREGULAR_PAST, UNSTRESSED_MONOSYLLABLES, DUAL_STRESS_MONOSYLLABLES } from './wordlists.js?v=38';
+import { analyzeWord } from './phonology.js?v=39';
+import { VOWELS } from './lexicon.js?v=39';
+import { classifyOrigin } from './etymology.js?v=39';
+import { FUNCTION_WORDS, IRREGULAR_PAST, UNSTRESSED_MONOSYLLABLES, DUAL_STRESS_MONOSYLLABLES } from './wordlists.js?v=39';
 
 // Stopwords for the definition-text index (function words + defining
 // vocabulary that appears in half of all glosses).

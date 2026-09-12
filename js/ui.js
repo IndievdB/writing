@@ -1,7 +1,7 @@
 // Rendering layer: takes an analysis result and paints the page.
-import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=38';
-import { VOWELS } from './lexicon.js?v=38';
-import { STRUCTURES, STRUCTURE_CATS, detectStructures } from './structures.js?v=38';
+import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=39';
+import { VOWELS } from './lexicon.js?v=39';
+import { STRUCTURES, STRUCTURE_CATS, detectStructures } from './structures.js?v=39';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 

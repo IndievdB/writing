@@ -71,6 +71,28 @@ check('weak: passive flagged', weak.findings.some((f) => f.id === 'passive'));
 check('readability present', rm.readability && rm.readability.fleschEase > 60,
   `flesch=${rm.readability?.fleschEase}`);
 
+// --- Sentence variety: clause anatomy.
+const anatomy = [
+  ['I stand for a moment longer in the twin suns’ stomping heat, wiping off sweat and fidgeting against the button up blouse and butterfly bow my mother had wrestled onto me.', 'one independent clause'],
+  ['Bob nocked an arrow, and drew it back to his cheek.', 'one independent clause'],
+  ['He ran to the gate, and the guards watched him.', 'two independent clauses joined by and'],
+  ['The dog bit the man who ran, and the crowd scattered.', 'two independent clauses joined by and, one dependent clause'],
+  ['I scrunch the letter of summons in my hands and squint up at the mess of cobblestone.', 'one independent clause'],
+  ['I waited, for the night was cold.', 'two independent clauses joined by for'],
+  ['Crouching in the ferns, he waited.', 'one independent clause'],
+  ['Wiping off sweat and fidgeting, I stood.', 'one independent clause'],
+  ['My mother laughed.', 'one independent clause'],
+  ['When the bell rang, the children ran outside.', 'one dependent clause, one independent clause'],
+];
+for (const [t, want] of anatomy) {
+  const v = analyzeText(t, lex).sentences[0].variety;
+  check(`anatomy: ${t.slice(0, 40)}…`, v.structure === want, v.structure);
+}
+check('participial opener classified', analyzeText('Crouching in the ferns, he waited.', lex)
+  .sentences[0].variety.opener === 'opens with a participial phrase');
+check('participial opener not a command', analyzeText('Crouching in the ferns, he waited.', lex)
+  .sentences[0].variety.func === 'declarative');
+
 // --- Empty / edge inputs must not throw.
 for (const edge of ['', '   ', '...', 'Word', 'Dr. Smith went to Washington. He left.', '“Quoted!” she said.', '12345 67']) {
   try { analyzeText(edge, lex); console.log(`PASS  edge input ${JSON.stringify(edge)}`); }

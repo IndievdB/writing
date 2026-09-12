@@ -5,13 +5,13 @@
 // calibrated band (some clash, some Latinate, some length variety is GOOD —
 // the target is a band, not zero). Findings are generated only where a metric
 // crosses a threshold, and every finding is anchored to exact source spans.
-import { tokenize, splitSentences } from './tokenize.js?v=38';
-import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=38';
-import { classifyOrigin } from './etymology.js?v=38';
+import { tokenize, splitSentences } from './tokenize.js?v=39';
+import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=39';
+import { classifyOrigin } from './etymology.js?v=39';
 import {
   FUNCTION_WORDS, COORDINATORS, SUBORDINATORS, BE_FORMS, WEAK_VERBS, FILLERS,
   IRREGULAR_PARTICIPLES, SUBJECT_PRONOUNS,
-} from './wordlists.js?v=38';
+} from './wordlists.js?v=39';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers
@@ -47,7 +47,8 @@ const FUNCTION_POS = (w) => {
   if (['will', 'would', 'shall', 'should', 'can', 'could', 'may', 'might', 'must'].includes(w)) return 'M';
   if (COORDINATORS.has(w)) return 'C';
   if (SUBORDINATORS.has(w)) return 'P';
-  if (['a', 'an', 'the', 'this', 'that', 'these', 'those', 'some', 'any', 'each', 'every', 'no', 'another'].includes(w)) return 'D';
+  if (['a', 'an', 'the', 'this', 'that', 'these', 'those', 'some', 'any', 'each', 'every', 'no', 'another',
+    'my', 'your', 'his', 'her', 'its', 'our', 'their'].includes(w)) return 'D';
   if (SUBJECT_PRONOUNS.has(w) || w.endsWith('self') || w.endsWith('selves')) return 'O';
   if (['not', 'very', 'just', 'only', 'too', 'also', 'then', 'here', 'there', 'still', 'even'].includes(w)) return 'R';
   return 'P';
@@ -61,10 +62,17 @@ function resolvePos(ann, i) {
   const next = ann[i + 1];
   const nextNouny = next && !next.isFunction && next.posSet.includes('N');
   if (set.includes('J') && nextNouny) return 'J';
+  // Attributive participle: an -ing form modifying the noun after it
+  // ("stomping heat", "running water") acts as an adjective, not a verb.
+  if (w.endsWith('ing') && set.includes('V') && nextNouny) return 'J';
   if ((w.endsWith('ing') || w.endsWith('ed')) && set.includes('V') && !nextNouny) return 'V';
   // Contextual disambiguation (ann[i-1].pos is already resolved):
   const prevPos = ann[i - 1]?.pos;
   if (set.includes('V') && (prevPos === 'N' || prevPos === 'O')) return 'V';
+  // After a coordinator, a verb-capable word not modifying a noun continues
+  // the predicate ("nocked an arrow, and drew it back") — without this,
+  // "drew" reads as the name Drew.
+  if (set.includes('V') && prevPos === 'C' && !nextNouny) return 'V';
   if (set.includes('J') && (prevPos === 'V' || prevPos === 'M')) return 'J';
   for (const c of ['N', 'V', 'J', 'R', 'U', 'E']) if (set.includes(c)) return c;
   // Unknown word: a subject pronoun almost always has its verb right after it
@@ -205,18 +213,41 @@ function classifyVariety(toks, ann) {
   const isSubj = (a) => ['O', 'N', 'D'].includes(a.pos);
   const isVerb = (a) => a.pos === 'V' || a.pos === 'M';
   // Does a fresh clause (a subject before its verb) start at position i?
+  // Is an N/V-ambiguous word at seq[j] really part of a noun compound
+  // ("butterfly bow my mother had wrestled")? Yes when another verb follows
+  // before the next pause with no relative pronoun in between — the verb
+  // belongs to a zero-relative on the noun, so this word is its head noun.
+  // With a relative pronoun ("bit the man who ran") the word is the verb.
+  const nounCompound = (j) => {
+    if (!seq[j].a.posSet.includes('N')) return false;
+    for (let k = j + 1; k < seq.length; k++) {
+      const it = seq[k];
+      if (!it.word) return false;
+      if (RELATIVES.has(it.a.lower) || it.a.lower === 'that') return false;
+      if (isVerb(it.a)) return true;
+    }
+    return false;
+  };
   const startsClause = (i) => {
-    let sawSubj = false;
+    let sawSubj = false, prevPos = null;
     for (let j = i; j < seq.length; j++) {
       const it = seq[j];
       if (!it.word) return false;
-      if (isVerb(it.a)) return sawSubj;
+      if (isVerb(it.a)) {
+        if (prevPos === 'N' && nounCompound(j)) { prevPos = 'N'; continue; }
+        return sawSubj;
+      }
+      // A determiner right after a bare noun ("…butterfly bow my mother had
+      // wrestled…") starts a second noun phrase before any verb — that's a
+      // zero-relative modifying the noun, not a fresh clause.
+      if (it.a.pos === 'D' && (prevPos === 'N' || prevPos === 'O')) return false;
       if (isSubj(it.a)) sawSubj = true;
+      prevPos = it.a.pos;
     }
     return false;
   };
 
-  let indep = 0, dep = 0, depFirst = false, closed = 0, skipVerb = false;
+  let indep = 0, dep = 0, depFirst = false, closed = 0, skipVerb = false, inParticiple = false;
   const joiners = [];
   let cur = { subj: false, verb: func === 'imperative', dep: false };
   const complete = () => cur.verb && (cur.subj || (func === 'imperative' && closed === 0));
@@ -228,6 +259,7 @@ function classifyVariety(toks, ann) {
   for (let i = 0; i < seq.length; i++) {
     const it = seq[i];
     if (!it.word) { // comma-grade pause
+      inParticiple = false;
       // A coordinator right after the comma will close the clause itself and
       // record the joiner ("…, and there were…"), so hold off here.
       const next = seq[i + 1];
@@ -238,6 +270,11 @@ function classifyVariety(toks, ann) {
       continue;
     }
     const a = it.a, w = a.lower;
+    // Inside a leading participial phrase, nothing counts toward the clause —
+    // "Wiping off sweat and fidgeting, I stood": neither "sweat" (the
+    // participle's object) nor "fidgeting" belongs to the main clause. An
+    // unambiguous subject pronoun ends the phrase even without a comma.
+    if (inParticiple) { if (a.pos === 'O') inParticiple = false; else continue; }
     if (i === 0 && SUBORDINATORS.has(w) && func !== 'interrogative') { cur.dep = true; continue; }
     if (i > 0 && SUBORDINATORS.has(w) && complete()) {
       close(); cur = { subj: false, verb: false, dep: true }; continue;
@@ -251,7 +288,13 @@ function classifyVariety(toks, ann) {
     if (a.pos === 'C' && complete() && startsClause(i + 1)) {
       close(); joiners.push(w); cur = { subj: false, verb: false, dep: false }; continue;
     }
-    if (isVerb(a)) { if (skipVerb) skipVerb = false; else cur.verb = true; }
+    if (isVerb(a)) {
+      if (skipVerb) skipVerb = false;
+      // A leading -ing participle ("Crouching in the ferns, he waited") is a
+      // modifier, not the clause's finite verb — the subject is still to come.
+      else if (w.endsWith('ing') && !cur.subj && !cur.verb) inParticiple = true;
+      else cur.verb = true;
+    }
     else if (!cur.verb && isSubj(a)) cur.subj = true;
   }
   close();
