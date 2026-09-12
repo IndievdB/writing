@@ -1,7 +1,7 @@
 // Rendering layer: takes an analysis result and paints the page.
-import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=36';
-import { VOWELS } from './lexicon.js?v=36';
-import { STRUCTURES, STRUCTURE_CATS, detectStructures } from './structures.js?v=36';
+import { BRIGHT_VOWELS, DARK_VOWELS } from './phonology.js?v=37';
+import { VOWELS } from './lexicon.js?v=37';
+import { STRUCTURES, STRUCTURE_CATS, detectStructures } from './structures.js?v=37';
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -18,8 +18,10 @@ const structureKind = (v) => v.structure.startsWith('fragment') ? 'fragment'
   : v.indep >= 2 && v.dep ? 'compound-complex'
   : v.indep >= 2 ? 'compound' : v.dep ? 'complex' : 'simple';
 
-// Observations only — what varies and what doesn't; the structure gallery
-// below is where the author browses what a sentence could be instead.
+// Each note pairs an observation (what the text does) with a suggestion
+// (one way to change it) — rendered under separate labels so the reader
+// always knows which is which. The structure gallery below stays the
+// judgement-free place to browse alternatives.
 function varietyNotes(sentences) {
   const notes = [];
   const vs = sentences.map((s) => s.variety);
@@ -27,36 +29,54 @@ function varietyNotes(sentences) {
   if (vs.length < 3) return notes;
   const lo = Math.min(...lens), hi = Math.max(...lens);
   if (hi - lo <= 5 && hi > 4) {
-    notes.push(`sentence lengths barely vary (${lo}–${hi} words)`);
+    notes.push({ obs: `sentence lengths barely vary (${lo}–${hi} words)`,
+      tip: 'follow a long sentence with a very short one' });
   }
   let run = 1;
   for (let i = 1; i < lens.length; i++) {
-    if (Math.abs(lens[i] - lens[i - 1]) <= 3) { run++; if (run === 4) { notes.push('four sentences of nearly equal length in a row'); break; } }
-    else run = 1;
+    if (Math.abs(lens[i] - lens[i - 1]) <= 3) {
+      run++;
+      if (run === 4) {
+        notes.push({ obs: 'four sentences of nearly equal length in a row',
+          tip: 'break the run with a much shorter or much longer sentence' });
+        break;
+      }
+    } else run = 1;
   }
   if (vs.length >= 4 && vs.every((v) => v.func === 'declarative')) {
-    notes.push('every sentence is a statement');
+    notes.push({ obs: 'every sentence is a statement',
+      tip: 'a question, command, or exclamation would change the mood' });
   }
   if (vs.every((v) => structureKind(v) === 'simple')) {
-    notes.push('every sentence is a single independent clause');
+    notes.push({ obs: 'every sentence is a single independent clause',
+      tip: 'combine two with a conjunction, or hang a dependent clause on one' });
   } else if (vs.length >= 4 && vs.every((v) => structureKind(v) === 'compound')) {
-    notes.push('every sentence is compound');
+    notes.push({ obs: 'every sentence is compound',
+      tip: 'split one in two, or subordinate one clause to the other' });
   }
   let orun = 1;
   for (let i = 1; i < vs.length; i++) {
     if (vs[i].opener === 'opens with the subject' && vs[i - 1].opener === vs[i].opener) {
       orun++;
-      if (orun === 4) { notes.push('four sentences in a row open with the subject'); break; }
+      if (orun === 4) {
+        notes.push({ obs: 'four sentences in a row open with the subject',
+          tip: 'front a phrase, an adverb, or a dependent clause' });
+        break;
+      }
     } else orun = 1;
   }
   const firsts = new Map();
   for (const v of vs) if (v.firstWord) firsts.set(v.firstWord, (firsts.get(v.firstWord) ?? 0) + 1);
   for (const [w, n] of firsts) {
-    if (n >= 3) notes.push(`${n} sentences begin with “${w}”`);
+    if (n >= 3) {
+      notes.push({ obs: `${n} sentences begin with “${w}”`,
+        tip: 'reword some of the openings' });
+    }
   }
   const frags = vs.filter((v) => structureKind(v) === 'fragment').length;
   if (frags >= 2 && frags / vs.length > 0.34) {
-    notes.push(`${frags} of ${vs.length} sentences are fragments`);
+    notes.push({ obs: `${frags} of ${vs.length} sentences are fragments`,
+      tip: 'if the choppiness isn’t deliberate, expand some into full clauses' });
   }
   return notes;
 }
@@ -77,7 +97,11 @@ function renderVariety(result, els) {
   if (els.varietyNotes) {
     els.varietyNotes.innerHTML =
       (summary ? `<div class="variety-mix">${esc(summary)}</div>` : '') +
-      notes.map((n) => `<div class="variety-tip">→ ${esc(n)}</div>`).join('');
+      notes.map((n) =>
+        `<div class="variety-tip">` +
+        `<div class="note-line"><span class="note-tag note-obs">analysis</span><span>${esc(n.obs)}</span></div>` +
+        `<div class="note-line"><span class="note-tag note-sug">suggestion</span><span>${esc(n.tip)}</span></div>` +
+        `</div>`).join('');
     els.varietyNotes.hidden = !summary && !notes.length;
   }
   const shapeCounts = new Map();

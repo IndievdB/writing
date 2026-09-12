@@ -5,13 +5,13 @@
 // calibrated band (some clash, some Latinate, some length variety is GOOD —
 // the target is a band, not zero). Findings are generated only where a metric
 // crosses a threshold, and every finding is anchored to exact source spans.
-import { tokenize, splitSentences } from './tokenize.js?v=36';
-import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=36';
-import { classifyOrigin } from './etymology.js?v=36';
+import { tokenize, splitSentences } from './tokenize.js?v=37';
+import { analyzeWord, syllabify, syllableInfo } from './phonology.js?v=37';
+import { classifyOrigin } from './etymology.js?v=37';
 import {
   FUNCTION_WORDS, COORDINATORS, SUBORDINATORS, BE_FORMS, WEAK_VERBS, FILLERS,
   IRREGULAR_PARTICIPLES, SUBJECT_PRONOUNS,
-} from './wordlists.js?v=36';
+} from './wordlists.js?v=37';
 
 // ---------------------------------------------------------------------------
 // Scoring helpers
@@ -67,7 +67,9 @@ function resolvePos(ann, i) {
   if (set.includes('V') && (prevPos === 'N' || prevPos === 'O')) return 'V';
   if (set.includes('J') && (prevPos === 'V' || prevPos === 'M')) return 'J';
   for (const c of ['N', 'V', 'J', 'R', 'U', 'E']) if (set.includes(c)) return c;
-  // Unknown word: guess from suffix.
+  // Unknown word: a subject pronoun almost always has its verb right after it
+  // ("I scrunch the letter"), then guess from suffix.
+  if (prevPos === 'O') return 'V';
   if (w.endsWith('ly')) return 'R';
   if (/(tion|sion|ment|ness|ance|ence|ity|ism|ship|hood)s?$/.test(w)) return 'N';
   if (/(ize|ise|ate|ify)s?$/.test(w) || /(ed|ing)$/.test(w)) return 'V';

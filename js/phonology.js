@@ -1,6 +1,6 @@
 // Per-word phonological analysis on top of the CMU dictionary.
-import { VOWELS, graphemeFallback } from './lexicon.js?v=36';
-import { FUNCTION_WORDS } from './wordlists.js?v=36';
+import { VOWELS, graphemeFallback } from './lexicon.js?v=37';
+import { FUNCTION_WORDS } from './wordlists.js?v=37';
 
 export const PLOSIVES = new Set(['P', 'B', 'T', 'D', 'K', 'G']);
 export const AFFRICATES = new Set(['CH', 'JH']);

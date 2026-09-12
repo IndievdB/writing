@@ -245,7 +245,17 @@ textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-c
 /* ---------- sentence variety ---------- */
 .variety-notes { margin: 0.3rem 0 0.7rem; font-size: 0.85rem; }
 .variety-mix { color: var(--ink-2); margin-bottom: 0.25rem; }
-.variety-tip { color: var(--accent); margin-top: 0.15rem; }
+.variety-tip { margin-top: 0.5rem; }
+.note-line { display: flex; gap: 0.45rem; align-items: baseline; margin-top: 0.1rem; }
+.note-tag {
+  flex: none; font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; border-radius: 999px; padding: 0.05rem 0.5rem;
+  border: 1px solid var(--hairline);
+}
+.note-obs { color: var(--ink-2); }
+.note-sug { color: var(--accent); border-color: var(--accent); }
+.note-line .note-obs + span { color: var(--ink); }
+.note-line .note-sug + span { color: var(--accent); }
 .variety-table { display: flex; flex-direction: column; }
 .variety-row {
   display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 1rem;
